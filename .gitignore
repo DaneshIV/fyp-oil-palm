@@ -1,0 +1,49 @@
+# Virtual environment
+fyp_env/
+
+# Datasets — too large for GitHub
+ai_model/datasets/
+
+# Trained model weights — too large
+ai_model/models/*.pt
+ai_model/models/*.onnx
+ai_model/runs/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variables
+.env
+.env.local
+
+# VS Code
+.vscode/
+
+# Node modules
+dashboard/node_modules/
+
+# Next.js build
+dashboard/.next/
+dashboard/out/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# MySQL dumps
+*.sql.bak
+```
+
+---
+
+## Step 5 — Copy CLAUDE.md Into Project
+
+Take the `CLAUDE.md` file you downloaded and copy it into:
+```
+C:\Users\danes\fyp-oil-palm\CLAUDE.md
