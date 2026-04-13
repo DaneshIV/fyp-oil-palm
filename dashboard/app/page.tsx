@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { sensorApi, alertApi, diseaseApi } from '@/lib/api'
 import SensorCard from '@/components/ui/SensorCard'
+import { SensorCardSkeleton } from '@/components/ui/Skeleton'
+import ThemeToggle from '@/components/ui/ThemeToggle'
 import { AlertTriangle, CheckCircle, RefreshCw, Wifi } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -56,13 +58,24 @@ export default function OverviewPage() {
     }
   }
 
+  const handleAcknowledge = async (id: number) => {
+    try {
+      await alertApi.acknowledge(id)
+      setAlerts(prev =>
+        prev.map(a => a.id === id ? { ...a, acknowledged: true } : a)
+      )
+    } catch (err) {
+      console.error('Failed to acknowledge:', err)
+    }
+  }
+
   useEffect(() => {
     fetchData()
     const interval = setInterval(fetchData, 5000)
     return () => clearInterval(interval)
   }, [])
 
-  const getSensorStatus = (type: string, value: number) => {
+  const getSensorStatus = (type: string, value: number): 'normal' | 'warning' | 'danger' => {
     if (type === 'temperature') {
       if (value > 35) return 'danger'
       if (value > 32) return 'warning'
@@ -113,9 +126,10 @@ export default function OverviewPage() {
         <div className="flex items-center gap-2 text-xs text-gray-400">
           <Wifi size={14} className="text-green-400" />
           <span>Live — updated {formatDistanceToNow(lastUpdated)} ago</span>
+          <ThemeToggle />
           <button
             onClick={fetchData}
-            className="ml-2 p-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors"
+            className="p-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors"
           >
             <RefreshCw size={14} />
           </button>
@@ -131,6 +145,8 @@ export default function OverviewPage() {
             unit="°C"
             icon="🌡️"
             status={getSensorStatus('temperature', sensors.temperature)}
+            safeRange="22–35°C"
+            live
           />
           <SensorCard
             label="Humidity"
@@ -138,6 +154,8 @@ export default function OverviewPage() {
             unit="%"
             icon="💧"
             status={getSensorStatus('humidity', sensors.humidity)}
+            safeRange="60–85%"
+            live
           />
           <SensorCard
             label="Soil Moisture"
@@ -145,6 +163,8 @@ export default function OverviewPage() {
             unit="%"
             icon="🌱"
             status={getSensorStatus('soil_moisture', sensors.soil_moisture)}
+            safeRange="40–70%"
+            live
           />
           <SensorCard
             label="EC Level"
@@ -152,17 +172,16 @@ export default function OverviewPage() {
             unit="mS/cm"
             icon="⚡"
             status={getSensorStatus('ec', sensors.ec_level)}
+            safeRange="1.2–2.2 mS/cm"
+            live
           />
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {['Temperature', 'Humidity', 'Soil Moisture', 'EC Level'].map(l => (
-            <div key={l} className="rounded-xl border border-gray-800 bg-gray-900 p-5 animate-pulse">
-              <div className="h-8 bg-gray-800 rounded mb-3 w-8" />
-              <div className="h-8 bg-gray-800 rounded mb-2 w-24" />
-              <div className="h-4 bg-gray-800 rounded w-20" />
-            </div>
-          ))}
+          <SensorCardSkeleton />
+          <SensorCardSkeleton />
+          <SensorCardSkeleton />
+          <SensorCardSkeleton />
         </div>
       )}
 
@@ -170,7 +189,9 @@ export default function OverviewPage() {
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
           <div className="text-sm text-gray-400 mb-1">Unacknowledged Alerts</div>
-          <div className={`text-3xl font-bold ${unacknowledgedAlerts.length > 0 ? 'text-red-400' : 'text-green-400'}`}>
+          <div className={`text-3xl font-bold ${
+            unacknowledgedAlerts.length > 0 ? 'text-red-400' : 'text-green-400'
+          }`}>
             {unacknowledgedAlerts.length}
           </div>
         </div>
@@ -219,8 +240,15 @@ export default function OverviewPage() {
                       {formatDistanceToNow(new Date(alert.triggered_at))} ago
                     </p>
                   </div>
-                  {alert.acknowledged && (
+                  {alert.acknowledged ? (
                     <CheckCircle size={14} className="text-green-400 flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <button
+                      onClick={() => handleAcknowledge(alert.id)}
+                      className="text-xs px-2 py-1 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors flex-shrink-0"
+                    >
+                      Ack
+                    </button>
                   )}
                 </div>
               ))
