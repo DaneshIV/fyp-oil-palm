@@ -11,8 +11,37 @@
 **Developer:** Danesh
 **Type:** Final Year Project (FYP)
 **Hardware:** IRIV PiControl Industry 4.0 AgriBox v2 (Raspberry Pi CM4-based industrial controller by Cytron Malaysia)
+**GitHub:** https://github.com/DaneshIV/fyp-oil-palm
  
-This system combines real-time IoT sensor monitoring with AI-powered disease detection for oil palm trees. It runs on an industrial edge controller (IRIV PiControl) deployed in the field, with a remote Next.js dashboard accessible from anywhere via Cloudflared tunnel.
+---
+ 
+## 📅 Current Project Status
+ 
+### ✅ Completed
+- [x] Project folder structure created
+- [x] GitHub repo initialized
+- [x] Virtual environment (fyp_env) set up
+- [x] PyTorch + CUDA 12.1 installed (RTX 3060 confirmed working)
+- [x] MySQL database (fyp_oil_palm) with 4 tables
+- [x] FastAPI backend — all endpoints working on port 8000
+- [x] MySQL → Supabase auto sync every 60 seconds
+- [x] Next.js 14 dashboard — all 5 pages complete
+  - [x] Overview page
+  - [x] Sensors page — real-time charts
+  - [x] Disease AI page — detection results
+  - [x] Automation page — relay controls + rules
+  - [x] Reports page — charts + CSV export
+ 
+### 🔲 Todo
+- [ ] Mendeley dataset — downloaded, not reviewed
+- [ ] Roboflow dataset — forked, needs YOLOv8 export
+- [ ] YOLOv8 training on RTX 3060
+- [ ] ONNX export for IRIV
+- [ ] Telegram bot
+- [ ] Cloudflared tunnel
+- [ ] IRIV hardware integration
+- [ ] Full system testing
+- [ ] FYP report
  
 ---
  
@@ -20,102 +49,92 @@ This system combines real-time IoT sensor monitoring with AI-powered disease det
  
 ```
 fyp-oil-palm/
-├── CLAUDE.md                          ← YOU ARE HERE
+├── CLAUDE.md
 ├── README.md
 ├── .gitignore
-│
-├── ai_model/                          ← AI disease detection
+├── .env                               ← Never commit!
+├── ai_model/
 │   ├── datasets/
-│   │   ├── roboflow/                  ← Roboflow Ganoderma dataset (YOLOv8 format)
-│   │   └── mendeley/                  ← Mendeley oil palm anomaly dataset
+│   │   ├── roboflow/
+│   │   └── mendeley/
 │   ├── training/
-│   │   ├── train.py                   ← YOLOv8 training script
-│   │   ├── detect.py                  ← Run inference on a single image
-│   │   └── evaluate.py                ← Confusion matrix, accuracy metrics
+│   │   ├── train.py
+│   │   ├── detect.py
+│   │   └── evaluate.py
 │   ├── models/
-│   │   ├── best.pt                    ← Best trained YOLOv8 weights
-│   │   └── best.onnx                  ← ONNX export for IRIV deployment
+│   │   ├── best.pt
+│   │   └── best.onnx
 │   └── notebooks/
-│       └── oil_palm_train.ipynb       ← Main Jupyter training notebook
-│
-├── backend/                           ← FastAPI server (runs ON the IRIV)
-│   ├── main.py                        ← FastAPI app entry point
+│       └── oil_palm_train.ipynb
+├── backend/
+│   ├── main.py                        ← FastAPI entry point (port 8000)
 │   ├── routes/
-│   │   ├── sensors.py                 ← GET /sensors/latest, /sensors/history
-│   │   ├── disease.py                 ← POST /disease/detect, GET /disease/history
-│   │   ├── alerts.py                  ← GET /alerts, POST /alerts/acknowledge
-│   │   └── automation.py              ← GET/POST /automation/rules, /automation/relay
-│   ├── models/
-│   │   └── schemas.py                 ← Pydantic request/response schemas
+│   │   ├── sensors.py
+│   │   ├── disease.py
+│   │   ├── alerts.py
+│   │   └── automation.py
+│   ├── schemas/
+│   │   └── schemas.py
 │   ├── database/
-│   │   ├── connection.py              ← MySQL connection (SQLAlchemy)
-│   │   └── init.sql                   ← SQL to create all tables
+│   │   ├── connection.py
+│   │   ├── init.sql
+│   │   └── supabase_sync.py
 │   └── requirements.txt
-│
-├── dashboard/                         ← Next.js 14 frontend
+├── dashboard/                         ← Next.js 16 (port 3000)
 │   ├── app/
-│   │   ├── page.tsx                   ← Overview / home dashboard
-│   │   ├── sensors/page.tsx           ← Real-time sensor monitoring
-│   │   ├── disease/page.tsx           ← Disease detection results + images
-│   │   ├── automation/page.tsx        ← Relay controls + automation rules
-│   │   └── reports/page.tsx           ← Historical charts + CSV export
+│   │   ├── page.tsx                   ← Overview ✅
+│   │   ├── sensors/page.tsx           ✅
+│   │   ├── disease/page.tsx           ✅
+│   │   ├── automation/page.tsx        ✅
+│   │   └── reports/page.tsx           ✅
 │   ├── components/
-│   │   ├── SensorCard.tsx
-│   │   ├── DiseaseResult.tsx
-│   │   ├── AlertFeed.tsx
-│   │   └── Charts/
+│   │   └── ui/
+│   │       ├── Sidebar.tsx            ✅
+│   │       └── SensorCard.tsx         ✅
 │   ├── lib/
-│   │   └── api.ts                     ← All FastAPI call functions
-│   └── package.json
-│
-├── iriv_scripts/                      ← Scripts deployed ON the IRIV hardware
-│   ├── sensor_collector.py            ← Polls RS485 + analog sensors → MySQL
-│   ├── camera_capture.py              ← Captures images via USB/CSI camera
-│   ├── inference_runner.py            ← Runs YOLOv8 ONNX on captured image
-│   ├── telegram_bot.py                ← Sends Telegram alerts
-│   └── automation_controller.py       ← Controls relay outputs (pumps, lights)
-│
+│   │   ├── api.ts                     ✅
+│   │   └── supabase.ts                ✅
+│   └── .env.local                     ← Never commit!
+├── iriv_scripts/
+│   ├── sensor_collector.py
+│   ├── camera_capture.py
+│   ├── inference_runner.py
+│   ├── telegram_bot.py
+│   └── automation_controller.py
 └── docs/
-    ├── architecture_diagram.html
-    ├── api_documentation.md
-    ├── setup_guide.md
-    └── dataset_sources.md
 ```
  
 ---
  
 ## 🔧 Hardware — IRIV PiControl AgriBox v2
  
-**Never assume generic Raspberry Pi behaviour. This is an industrial controller with specific interfaces.**
- 
 | Component | Detail |
 |---|---|
 | SoM | Raspberry Pi Compute Module 4 (CM4) |
-| CPU | Broadcom BCM2711 Quad-core Cortex-A72 @ 1.5GHz |
+| CPU | Quad-core Cortex-A72 @ 1.5GHz |
 | RAM | 4GB LPDDR4 |
 | Storage | 32GB eMMC |
-| Connectivity | WiFi (802.11ac), Bluetooth 5.0, Gigabit Ethernet |
-| Serial | RS232 + RS485 (Modbus RTU) via terminal blocks |
-| Analog Inputs | 4× isolated (0–5V / 0–10V / 4–20mA) via ADS1115 ADC (I²C 0x48) |
+| Connectivity | WiFi, Bluetooth 5.0, Gigabit Ethernet |
+| Serial | RS232 + RS485 (Modbus RTU) |
+| Analog Inputs | 4× isolated via ADS1115 ADC (I²C 0x48) |
 | Digital I/O | Isolated DI + DO up to 50V |
-| Camera | USB or CSI (Pi Camera) |
-| OS | Raspberry Pi OS (Debian-based) |
-| Mounting | DIN Rail |
-| Power | 24V DC industrial PSU |
+| Camera | USB or CSI |
+| OS | Raspberry Pi OS |
+| Power | 24V DC |
  
-**RS485 port on IRIV:** `/dev/ttyS0` (baud 9600, Modbus RTU)
+**RS485 port:** `/dev/ttyS0` (baud 9600, Modbus RTU)
 **ADS1115 I²C address:** `0x48`
  
 ---
  
 ## 🌡️ Sensors
  
-| Sensor | Interface | Python Library | Notes |
-|---|---|---|---|
-| Temperature + Humidity (industrial) | RS485 Modbus RTU | `pymodbus` | Register addresses in sensor datasheet |
-| Soil Moisture | RS485 Modbus RTU | `pymodbus` | |
-| EC (Electrical Conductivity) | Analog 4–20mA → ADS1115 | `adafruit-ads1x15` | Enable internal shunt resistor |
-| Camera | USB or CSI | `opencv-python` | For disease detection images |
+| Sensor | Interface | Library |
+|---|---|---|
+| Temperature + Humidity | RS485 Modbus RTU | `pymodbus` |
+| Soil Moisture | RS485 Modbus RTU | `pymodbus` |
+| EC Level | Analog 4–20mA → ADS1115 | `adafruit-ads1x15` |
+| Camera | USB / CSI | `opencv-python` |
  
 ---
  
@@ -124,22 +143,18 @@ fyp-oil-palm/
 | Detail | Value |
 |---|---|
 | Architecture | YOLOv8 (Ultralytics) |
-| Task | Object Detection (disease location on tree/fruit) |
-| Dataset 1 | Roboflow — Palm Oil Leaf Ganoderma (YOLOv8 format) |
-| Dataset 2 | Mendeley — Oil Palm Tree Anomaly Detection |
-| Target Classes | healthy, ganoderma, bud_rot, crown_disease |
-| Training Hardware | NVIDIA RTX 3060 Laptop GPU (local) |
-| Deployment Format | ONNX (`best.onnx`) on IRIV |
-| Inference Script | `iriv_scripts/inference_runner.py` |
-| Target Inference Time | < 3 seconds on CM4 |
+| Task | Object Detection |
+| Dataset 1 | Roboflow — Palm Oil Leaf Ganoderma |
+| Dataset 2 | Mendeley — Oil Palm Anomaly Detection |
+| Classes | healthy, ganoderma, bud_rot, crown_disease |
+| Training GPU | RTX 3060 Laptop (6GB VRAM) |
+| Deploy Format | ONNX on IRIV |
  
-**Training command:**
 ```bash
+# Train
 yolo detect train data=datasets/data.yaml model=yolov8n.pt epochs=50 imgsz=640 device=0
-```
  
-**Export to ONNX:**
-```bash
+# Export
 yolo export model=models/best.pt format=onnx
 ```
  
@@ -150,145 +165,126 @@ yolo export model=models/best.pt format=onnx
 | Detail | Value |
 |---|---|
 | Framework | FastAPI + Uvicorn |
-| Database | MySQL 8.0 (local on IRIV) |
+| Database | MySQL 8.0 — `fyp_oil_palm` |
 | ORM | SQLAlchemy |
-| Auth | JWT tokens |
-| Real-time | WebSocket for live sensor push |
+| Cloud | Supabase sync every 60s |
 | Port | 8000 |
-| Run command | `uvicorn backend.main:app --host 0.0.0.0 --port 8000` |
+| Docs | http://localhost:8000/docs |
  
-**Key API endpoints:**
+**MySQL (local dev):**
 ```
-GET  /sensors/latest           → Latest sensor readings
-GET  /sensors/history?hours=24 → Historical data
-POST /disease/detect           → Trigger camera capture + AI inference
-GET  /disease/history          → Past detection results
-GET  /alerts                   → All alerts
-POST /alerts/{id}/acknowledge  → Acknowledge an alert
-GET  /automation/rules         → List automation rules
-POST /automation/relay         → Manually toggle a relay
+DB_USER=root
+DB_PASSWORD=fyp1234
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=fyp_oil_palm
+```
+ 
+**Endpoints:**
+```
+GET  /sensors/latest
+GET  /sensors/history?hours=24
+POST /sensors/
+GET  /disease/history?limit=20
+GET  /disease/latest
+POST /disease/
+GET  /alerts/
+GET  /alerts/count
+POST /alerts/{id}/acknowledge
+POST /alerts/acknowledge-all
+GET  /automation/rules
+POST /automation/rules
+PATCH /automation/rules/{id}/toggle
+DELETE /automation/rules/{id}
+POST /automation/relay
+POST /sync
+GET  /health
 ```
  
 ---
  
-## 🗄️ Database Schema (MySQL)
+## 🗄️ Database Schema
  
 ```sql
--- sensor_readings
-id, temperature, humidity, soil_moisture, ec_level, timestamp
+sensor_readings:    id, temperature, humidity, soil_moisture, ec_level, timestamp
+disease_detections: id, image_path, disease_label, confidence, severity, tree_id, block_id, timestamp
+alerts:             id, alert_type, message, sensor_value, threshold, acknowledged, triggered_at
+automation_rules:   id, rule_name, trigger_type, sensor_field, threshold_value, operator, relay_pin, is_active, last_triggered, created_at
+```
  
--- disease_detections
-id, image_path, disease_label, confidence, severity, tree_id, block_id, timestamp
- 
--- alerts
-id, alert_type, message, sensor_value, threshold, acknowledged, triggered_at
- 
--- automation_rules
-id, rule_name, trigger_type (threshold/schedule), sensor_field,
-threshold_value, operator, relay_pin, is_active, last_triggered
+**Default rules:**
+```
+Drip Irrigation  → soil_moisture < 40  → Relay 1
+Mist Cooling     → temperature > 35    → Relay 2
+Fertilizer Pump  → ec_level < 1.2      → Relay 3
 ```
  
 ---
  
-## 🖥️ Frontend — Next.js Dashboard
+## 🖥️ Dashboard — Next.js
  
 | Detail | Value |
 |---|---|
-| Framework | Next.js 14 (App Router) |
+| Framework | Next.js 16 App Router |
 | Language | TypeScript |
 | Styling | Tailwind CSS |
 | Charts | Recharts |
-| Data Fetching | SWR or React Query |
-| Real-time | WebSocket (live sensor updates) |
-| Auth | JWT stored in httpOnly cookies |
- 
-**Pages:**
-- `/` — Overview with key metrics, latest alerts, system status
-- `/sensors` — Real-time charts for temp, humidity, soil moisture, EC
-- `/disease` — Disease detection results, captured images, confidence scores
-- `/automation` — Toggle relays, manage rules, view pump/irrigation status
-- `/reports` — Historical charts, date range filter, CSV export
+| HTTP | Axios |
+| Icons | Lucide React |
+| Dates | date-fns |
+| Port | 3000 |
  
 ---
  
-## 🔐 Remote Access
+## ☁️ Supabase
  
 | Detail | Value |
 |---|---|
-| Tool | Cloudflared Tunnel (free) |
-| Purpose | Expose IRIV's FastAPI to the internet securely |
-| No port forwarding | ✅ Works behind any firewall/university network |
-| Run command | `cloudflared tunnel run` |
-| Config file | `~/.cloudflared/config.yml` on IRIV |
+| URL | https://zltdegjlrgdrustyqcro.supabase.co |
+| Region | Singapore (SEA) |
+| Tables | sensor_readings, disease_detections, alerts, automation_rules |
+| Realtime | Enabled on sensor_readings, disease_detections, alerts |
  
 ---
  
-## 📲 Telegram Bot
- 
-| Detail | Value |
-|---|---|
-| Library | `python-telegram-bot` |
-| Script | `iriv_scripts/telegram_bot.py` |
-| Triggers | Soil moisture < 40%, Temp > 35°C, Disease detected, Pump ON/OFF |
-| Features | Photo messages (disease image + label), inline acknowledge buttons |
- 
----
- 
-## 🛠️ Local Development Environment
+## 🛠️ Local Dev Environment
  
 | Detail | Value |
 |---|---|
 | OS | Windows |
-| GPU | NVIDIA RTX 3060 Laptop (6GB VRAM) |
-| CUDA | 12.1 |
-| Python | 3.10+ |
-| Virtual env | `fyp_env` (activate: `fyp_env\Scripts\activate`) |
-| Node.js | 18+ (for Next.js dashboard) |
-| IDE | VS Code |
+| GPU | RTX 3060 Laptop — CUDA 12.1 ✅ |
+| Python | 3.12 |
+| Venv | `fyp_env\Scripts\activate` |
+| MySQL | 8.0.45 — `C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe` |
+| Node | 18+ |
  
-**Python dependencies (key ones):**
-```
-torch, torchvision (cu121)
-ultralytics          ← YOLOv8
-fastapi, uvicorn
-sqlalchemy, pymysql
-pymodbus             ← RS485 Modbus RTU
-adafruit-ads1x15     ← Analog EC sensor
-opencv-python
-python-telegram-bot
-roboflow
+**Start dev servers:**
+```powershell
+# Terminal 1 — Backend
+cd C:\Users\danes\fyp-oil-palm
+fyp_env\Scripts\activate
+uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+ 
+# Terminal 2 — Dashboard
+cd C:\Users\danes\fyp-oil-palm\dashboard
+npm run dev
 ```
  
 ---
  
-## ⚠️ Important Rules for Claude Code
+## ⚠️ Rules for Claude Code
  
-1. **Never use Node-RED** — we are building a custom Next.js dashboard, not Node-RED
-2. **Never use Grafana** — all visualisation is in the custom Next.js frontend
-3. **Backend runs on IRIV** — FastAPI must be lightweight, no heavy dependencies
-4. **Model format is ONNX** on IRIV — NOT `.pt` (PyTorch not installed on IRIV)
-5. **Database is MySQL** — NOT SQLite, NOT PostgreSQL
-6. **RS485 port is `/dev/ttyS0`** on IRIV — do not assume `/dev/ttyUSB0`
-7. **ADS1115 I²C address is `0x48`** — hardcoded in IRIV hardware
-8. **All sensor polling is in `iriv_scripts/sensor_collector.py`** — not in FastAPI
-9. **Dashboard fetches from FastAPI** — never reads MySQL directly from Next.js
-10. **Git ignore datasets and model weights** — too large for GitHub
- 
----
- 
-## 📅 Project Status
- 
-- [x] System architecture designed
-- [x] Project folder structure created
-- [x] GitHub repo initialised
-- [ ] Dataset collection (Roboflow + Mendeley) — IN PROGRESS
-- [ ] YOLOv8 training
-- [ ] ONNX export + IRIV deployment
-- [ ] FastAPI backend
-- [ ] MySQL schema
-- [ ] Next.js dashboard
-- [ ] Telegram bot
-- [ ] Cloudflared tunnel setup
-- [ ] Hardware integration (after IRIV arrives)
-- [ ] Full system testing
-- [ ] FYP report writing
+1. Never use Node-RED — custom Next.js only
+2. Never use Grafana — charts are in Next.js
+3. Backend is FastAPI — lightweight only
+4. IRIV uses ONNX model — NOT .pt
+5. Database is MySQL — NOT SQLite/PostgreSQL
+6. RS485 port is `/dev/ttyS0` on IRIV
+7. ADS1115 I²C is `0x48`
+8. Sensor polling in `iriv_scripts/sensor_collector.py`
+9. Dashboard fetches from FastAPI only — never direct MySQL
+10. Import paths use `backend.` prefix — e.g. `from backend.schemas.schemas import ...`
+11. All `__init__.py` files are empty
+12. MySQL local password is `fyp1234`
+13. Dashboard has its own `.env.local`
+14. Supabase URL is https://zltdegjlrgdrustyqcro.supabase.co
