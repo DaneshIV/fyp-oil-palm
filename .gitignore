@@ -40,7 +40,12 @@ Thumbs.db
 # Trained model weights — too large
 #ai_model/models/*.pt
 #ai_model/models/*.onnx
+
+#Training Runs - Too Large
 ai_model/runs/
+
+#But keep Evaluation Result runs for analysis
+!ai_model/runs/evaluation/
 
 
 # MySQL dumps
