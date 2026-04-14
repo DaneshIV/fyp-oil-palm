@@ -36,11 +36,20 @@ Thumbs.db
 # Jupyter checkpoints
 .ipynb_checkpoints/
 
+
+# Trained model weights — too large
+#ai_model/models/*.pt
+#ai_model/models/*.onnx
+ai_model/runs/
+
+
 # MySQL dumps
 *.sql.bak
 ```
 
 ---
+
+
 
 ## Step 5 — Copy CLAUDE.md Into Project
 
