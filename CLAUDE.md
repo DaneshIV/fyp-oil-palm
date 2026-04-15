@@ -13,8 +13,6 @@
 **Hardware:** IRIV PiControl Industry 4.0 AgriBox v2 (Raspberry Pi CM4-based industrial controller by Cytron Malaysia)
 **GitHub:** https://github.com/DaneshIV/fyp-oil-palm
 
-This system combines real-time IoT sensor monitoring with AI-powered disease detection for oil palm trees. It runs on an industrial edge controller (IRIV PiControl) deployed in the field, with a remote Next.js dashboard accessible from anywhere via Cloudflared tunnel.
-
 ---
 
 ## 📅 Current Project Status
@@ -23,30 +21,35 @@ This system combines real-time IoT sensor monitoring with AI-powered disease det
 - [x] Project folder structure + GitHub repo
 - [x] Virtual environment (fyp_env) — Python 3.12
 - [x] PyTorch + CUDA 12.1 (RTX 3060 Laptop confirmed working)
-- [x] MySQL database (fyp_oil_palm) — 4 tables created
+- [x] MySQL database (fyp_oil_palm) — 4 tables
 - [x] FastAPI backend — all endpoints working on port 8000
 - [x] MySQL → Supabase auto sync every 60 seconds
+- [x] Supabase RLS security enabled on all 4 tables
 - [x] Next.js 16 dashboard — all 5 pages complete
-  - [x] Overview page — live sensor cards, alerts, disease feed
-  - [x] Sensors page — real-time charts, safe zone indicators
-  - [x] Disease AI page — detection results, confidence bars
-  - [x] Automation page — relay controls, rule management
-  - [x] Reports page — historical charts, CSV export
+  - [x] Overview — live sensor cards, alerts, disease feed
+  - [x] Sensors — real-time charts, safe zone indicators
+  - [x] Disease AI — detection results, confidence bars
+  - [x] Automation — relay controls, rule management
+  - [x] Reports — historical charts, CSV export
 - [x] Dashboard improvements — live indicators, skeletons, alert ack, theme toggle
 - [x] Telegram bot — all alert types working
 - [x] AI Model — YOLOv8n trained and ONNX exported
-  - [x] Dataset: 3 Roboflow datasets merged (5,725 images total)
+  - [x] 3 Roboflow datasets merged (5,725 images)
   - [x] Classes: healthy, ganoderma, unhealthy, immature
-  - [x] Training: 50 epochs, RTX 3060, mAP50 = 76.3%
-  - [x] Ganoderma mAP50 = 92.6% (most critical class)
+  - [x] YOLOv8n: 50 epochs, mAP50 = 76.3% (FINAL MODEL)
+  - [x] YOLOv8s: 50 epochs, mAP50 = 67.1% (comparison)
   - [x] Exported: best.pt (6MB) + best.onnx (11.7MB)
+  - [x] Confusion matrix + evaluation charts generated
+- [x] Git LFS for model weights
+- [x] 3x backups — GitHub, D drive, Google Drive
+- [x] Cloudflared installed (C:\Program Files (x86)\cloudflared)
+- [x] IRIV hardware scripts — all 4 complete + tested in simulation
 
 ### 🔲 Todo
-- [ ] Cloudflared tunnel setup
-- [ ] Write IRIV hardware integration scripts
-- [ ] Deploy to IRIV when hardware arrives
-- [ ] Connect RS485 sensors
-- [ ] Full system end-to-end testing
+- [ ] Cloudflared tunnel test — need home WiFi
+- [ ] IRIV hardware arrives → deploy + test
+- [ ] Connect RS485 sensors on IRIV
+- [ ] Full end-to-end system test
 - [ ] FYP report writing
 
 ---
@@ -61,33 +64,31 @@ fyp-oil-palm/
 ├── .env                               ← Never commit!
 │
 ├── ai_model/
-│   ├── data.yaml                      ← YOLOv8 dataset config (points to balanced)
+│   ├── data.yaml                      ← Points to balanced dataset
 │   ├── datasets/
-│   │   ├── roboflow/                  ← Downloaded Roboflow datasets
-│   │   │   ├── palm_leaf_ganoderma/   ← 440 images, 3 classes
-│   │   │   ├── oil_palm_health/       ← 2,073 images, 2 classes
-│   │   │   └── tree_health_detection/ ← 2,651 images, 6 classes
-│   │   ├── combined/                  ← Merged dataset (5,725 images)
-│   │   └── balanced/                  ← Balanced dataset (used for training)
-│   │       ├── train/images + labels
-│   │       ├── val/images + labels
-│   │       └── test/images + labels
+│   │   ├── roboflow/
+│   │   │   ├── palm_leaf_ganoderma/   ← 440 images
+│   │   │   ├── oil_palm_health/       ← 2,073 images
+│   │   │   └── tree_health_detection/ ← 2,651 images
+│   │   ├── combined/                  ← Merged (5,725 images)
+│   │   └── balanced/                  ← Balanced (used for training)
 │   ├── models/
-│   │   ├── best.pt                    ← PyTorch weights (6MB)
-│   │   └── best.onnx                  ← ONNX for IRIV deployment (11.7MB)
+│   │   ├── best.pt                    ← YOLOv8n weights (6MB) ✅ FINAL
+│   │   ├── best.onnx                  ← ONNX for IRIV (11.7MB) ✅
+│   │   └── best_v2_yolov8s.pt         ← YOLOv8s comparison
 │   ├── runs/
-│   │   └── oil_palm_v1/               ← Training results, charts, metrics
-│   ├── training/
-│   │   ├── train.py                   ← YOLOv8 training script ✅
-│   │   ├── prepare_dataset.py         ← Dataset merger script ✅
-│   │   ├── balance_dataset.py         ← Dataset balancer script ✅
-│   │   ├── detect.py                  ← Run inference on image
-│   │   └── evaluate.py                ← Metrics + confusion matrix
-│   └── notebooks/
-│       └── oil_palm_train.ipynb
+│   │   ├── oil_palm_v1/               ← YOLOv8n training results
+│   │   ├── oil_palm_v2/               ← YOLOv8s training results
+│   │   └── evaluation/                ← Confusion matrix + charts ✅
+│   └── training/
+│       ├── train.py                   ← YOLOv8 training script ✅
+│       ├── prepare_dataset.py         ← Dataset merger ✅
+│       ├── balance_dataset.py         ← Dataset balancer ✅
+│       ├── evaluate.py                ← Evaluation + charts ✅
+│       └── detect.py                  ← Single image inference
 │
 ├── backend/
-│   ├── main.py                        ← FastAPI entry point (port 8000) ✅
+│   ├── main.py                        ← FastAPI (port 8000) ✅
 │   ├── routes/
 │   │   ├── sensors.py                 ✅
 │   │   ├── disease.py                 ✅
@@ -95,15 +96,14 @@ fyp-oil-palm/
 │   │   └── automation.py              ✅
 │   ├── schemas/
 │   │   └── schemas.py                 ✅
-│   ├── database/
-│   │   ├── connection.py              ✅
-│   │   ├── init.sql                   ✅
-│   │   └── supabase_sync.py           ✅
-│   └── requirements.txt
+│   └── database/
+│       ├── connection.py              ✅
+│       ├── init.sql                   ✅
+│       └── supabase_sync.py           ✅
 │
 ├── dashboard/                         ← Next.js 16 (port 3000)
 │   ├── app/
-│   │   ├── page.tsx                   ← Overview ✅
+│   │   ├── page.tsx                   ✅ Overview
 │   │   ├── sensors/page.tsx           ✅
 │   │   ├── disease/page.tsx           ✅
 │   │   ├── automation/page.tsx        ✅
@@ -114,17 +114,16 @@ fyp-oil-palm/
 │   │   ├── Skeleton.tsx               ✅
 │   │   ├── LiveIndicator.tsx          ✅
 │   │   └── ThemeToggle.tsx            ✅
-│   ├── lib/
-│   │   ├── api.ts                     ✅
-│   │   └── supabase.ts                ✅
-│   └── .env.local                     ← Never commit!
+│   └── lib/
+│       ├── api.ts                     ✅
+│       └── supabase.ts                ✅
 │
-├── iriv_scripts/
-│   ├── sensor_collector.py            ← RS485 + analog sensor polling
-│   ├── camera_capture.py              ← USB/CSI camera capture
-│   ├── inference_runner.py            ← YOLOv8 ONNX inference
-│   ├── telegram_bot.py                ← Telegram alerts ✅
-│   └── automation_controller.py       ← Relay control
+├── iriv_scripts/                      ← All tested in simulation ✅
+│   ├── sensor_collector.py            ✅ RS485 + simulation mode
+│   ├── camera_capture.py              ✅ USB/CSI + simulation mode
+│   ├── inference_runner.py            ✅ ONNX inference + simulation
+│   ├── telegram_bot.py                ✅ All alert types working
+│   └── automation_controller.py       ✅ Relay control + simulation
 │
 └── docs/
     └── architecture_diagram.html      ✅
@@ -134,16 +133,14 @@ fyp-oil-palm/
 
 ## 🔧 Hardware — IRIV PiControl AgriBox v2
 
-**Never assume generic Raspberry Pi behaviour. This is an industrial controller.**
-
 | Component | Detail |
 |---|---|
 | SoM | Raspberry Pi Compute Module 4 (CM4) |
-| CPU | Broadcom BCM2711 Quad-core Cortex-A72 @ 1.5GHz |
+| CPU | Quad-core Cortex-A72 @ 1.5GHz |
 | RAM | 4GB LPDDR4 |
 | Storage | 32GB eMMC |
-| Connectivity | WiFi (802.11ac), Bluetooth 5.0, Gigabit Ethernet |
-| Serial | RS232 + RS485 (Modbus RTU) via terminal blocks |
+| Connectivity | WiFi, Bluetooth 5.0, Gigabit Ethernet |
+| Serial | RS232 + RS485 (Modbus RTU) |
 | Analog Inputs | 4× isolated via ADS1115 ADC (I²C 0x48) |
 | Digital I/O | Isolated DI + DO up to 50V |
 | Camera | USB or CSI |
@@ -170,38 +167,30 @@ fyp-oil-palm/
 
 | Detail | Value |
 |---|---|
-| Architecture | YOLOv8n (nano) |
-| Task | Object Detection — whole plant disease |
+| Architecture | YOLOv8n (nano) — FINAL |
 | Parameters | 3,006,428 |
-| Model Size | 6MB (.pt) / 11.7MB (.onnx) |
-| Input Shape | 640×640 |
+| Size | 6MB (.pt) / 11.7MB (.onnx) |
 | Inference Speed | 6ms per image |
 | Overall mAP50 | 76.3% |
-| Ganoderma mAP50 | 92.6% ← most critical |
+| Ganoderma mAP50 | 92.6% |
 | Healthy mAP50 | 97.3% |
 | Unhealthy mAP50 | 75.1% |
 | Immature mAP50 | 40.1% |
 
-**Classes (4 total):**
+**Classes:**
 ```
 0: healthy     → Normal healthy palm
-1: ganoderma   → Bracket fungus, yellowing fronds
-2: unhealthy   → General disease symptoms
-3: immature    → Immature/young palm
+1: ganoderma   → Bracket fungus, yellowing fronds (HIGH severity)
+2: unhealthy   → General disease symptoms (MEDIUM severity)
+3: immature    → Immature/young palm (LOW severity)
 ```
 
-**Datasets used:**
+**Datasets:**
 ```
-palm_leaf_ganoderma    → 440 images  (Healthy, Infected, Initial Infection)
-oil_palm_health        → 2,073 images (Healthy, Unhealthy)
-tree_health_detection  → 2,651 images (healthy, stressed, unhealthy, immature)
-Total combined         → 5,725 images
-After balancing        → ~4,859 images (train:3000+, val:2000+, test:1000+)
-```
-
-**Training command:**
-```bash
-python ai_model/training/train.py
+palm_leaf_ganoderma    → 440 images
+oil_palm_health        → 2,073 images
+tree_health_detection  → 2,651 images
+Total                  → 5,725 images
 ```
 
 **Run inference:**
@@ -211,10 +200,10 @@ model = YOLO('ai_model/models/best.pt')
 results = model('image.jpg', conf=0.5, iou=0.45)
 ```
 
-**Export to ONNX (already done):**
-```bash
-yolo export model=ai_model/models/best.pt format=onnx
-```
+**Why YOLOv8n over YOLOv8s:**
+YOLOv8n (76.3%) outperformed YOLOv8s (67.1%) on our dataset.
+Smaller datasets favour lighter architectures. Also faster inference
+on IRIV CM4 (6ms vs 11ms).
 
 ---
 
@@ -229,18 +218,14 @@ yolo export model=ai_model/models/best.pt format=onnx
 | Port | 8000 |
 | Docs | http://localhost:8000/docs |
 
-**MySQL credentials (local dev):**
+**MySQL credentials:**
 ```
 DB_USER=root
 DB_PASSWORD=fyp1234
 DB_HOST=localhost
 DB_PORT=3306
 DB_NAME=fyp_oil_palm
-```
-
-**MySQL path on Windows:**
-```
-C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe
+MySQL path: C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe
 ```
 
 **Key endpoints:**
@@ -275,7 +260,7 @@ alerts:             id, alert_type, message, sensor_value, threshold, acknowledg
 automation_rules:   id, rule_name, trigger_type, sensor_field, threshold_value, operator, relay_pin, is_active, last_triggered, created_at
 ```
 
-**Default automation rules:**
+**Default rules:**
 ```
 Drip Irrigation  → soil_moisture < 40  → Relay 1
 Mist Cooling     → temperature > 35    → Relay 2
@@ -306,7 +291,7 @@ Fertilizer Pump  → ec_level < 1.2      → Relay 3
 |---|---|
 | URL | https://zltdegjlrgdrustyqcro.supabase.co |
 | Region | Singapore (SEA) |
-| Tables | sensor_readings, disease_detections, alerts, automation_rules |
+| RLS | Enabled on all 4 tables ✅ |
 | Sync | Auto every 60s via supabase_sync.py |
 
 ---
@@ -316,20 +301,29 @@ Fertilizer Pump  → ec_level < 1.2      → Relay 3
 | Detail | Value |
 |---|---|
 | Script | `iriv_scripts/telegram_bot.py` |
-| Library | `python-telegram-bot` |
-| Alerts | Soil moisture, temperature, EC, disease detection, relay status, daily summary |
+| Alerts | Soil moisture, temperature, EC, disease, relay, daily summary |
 | Test | `python iriv_scripts/telegram_bot.py` |
 
 ---
 
-## 🔐 Cloudflared Tunnel (TODO)
+## 🔐 Cloudflared
 
 | Detail | Value |
 |---|---|
-| Tool | Cloudflared (free) |
-| Purpose | Expose IRIV FastAPI to internet securely |
-| Run | `cloudflared tunnel run` |
-| Config | `~/.cloudflared/config.yml` on IRIV |
+| Status | Installed ✅ |
+| Path | `C:\Program Files (x86)\cloudflared\cloudflared.exe` |
+| VS Code PATH | Added via settings.json |
+| Quick test | `cloudflared tunnel --url http://localhost:8000` |
+
+---
+
+## 💾 Backups
+
+| Location | Status | Contents |
+|---|---|---|
+| GitHub | ✅ | Code + model weights (Git LFS) |
+| D: drive | ✅ | Full project (robocopy) |
+| Google Drive | ✅ | Full project backup |
 
 ---
 
@@ -344,7 +338,7 @@ Fertilizer Pump  → ec_level < 1.2      → Relay 3
 | MySQL | 8.0.45 |
 | Node | 18+ |
 
-**Start both servers:**
+**Start dev servers:**
 ```powershell
 # Terminal 1 — Backend
 cd C:\Users\danes\fyp-oil-palm
@@ -354,6 +348,38 @@ uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 # Terminal 2 — Dashboard
 cd C:\Users\danes\fyp-oil-palm\dashboard
 npm run dev
+
+# Terminal 3 — Sensor simulation (optional)
+cd C:\Users\danes\fyp-oil-palm
+fyp_env\Scripts\activate
+python iriv_scripts/sensor_collector.py
+```
+
+---
+
+## 🚀 IRIV Deployment Checklist (When Hardware Arrives)
+
+```
+1. Flash Raspberry Pi OS to IRIV eMMC
+2. Configure WiFi on IRIV
+3. Install Python dependencies:
+   pip install fastapi uvicorn sqlalchemy pymysql
+   pip install pymodbus adafruit-ads1x15
+   pip install python-telegram-bot opencv-python
+   pip install onnxruntime python-dotenv
+4. Copy project files via SCP:
+   scp -r fyp-oil-palm/ pi@IRIV_IP:~/
+5. Set up MySQL on IRIV
+6. Run init.sql to create tables
+7. Copy .env file with credentials
+8. Copy best.onnx to ai_model/models/
+9. Set up Cloudflared tunnel
+10. Start services:
+    uvicorn backend.main:app --host 0.0.0.0 --port 8000
+    python iriv_scripts/sensor_collector.py
+    python iriv_scripts/automation_controller.py
+11. Set up systemd services for auto-start
+12. Test full end-to-end system
 ```
 
 ---
@@ -374,5 +400,9 @@ npm run dev
 12. MySQL local password is `fyp1234`
 13. Dashboard has its own `.env.local`
 14. Supabase URL: https://zltdegjlrgdrustyqcro.supabase.co
-15. YOLOv8 model inference: use conf=0.5, iou=0.45
-16. Model classes order: [healthy, ganoderma, unhealthy, immature]
+15. YOLOv8 inference: conf=0.5, iou=0.45
+16. Model classes: [healthy, ganoderma, unhealthy, immature]
+17. IRIV scripts have simulation mode — ON_IRIV = sys.platform == 'linux'
+18. Final model is YOLOv8n (best.pt) NOT YOLOv8s
+19. Supabase RLS is enabled — use service role key for backend
+20. Git push on uni WiFi: git config --global http.sslVerify false, then re-enable after
