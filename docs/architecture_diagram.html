@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>IoT Oil Palm — System Architecture</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;700;800&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #060d06;
+    --layer1: #0b160b;
+    --layer2: #0f1f0f;
+    --border: #1a3a1a;
+    --border-bright: #2d5a2d;
+    --green: #4ade80;
+    --green-dim: #166534;
+    --green-glow: rgba(74,222,128,0.18);
+    --teal: #2dd4bf;
+    --teal-glow: rgba(45,212,191,0.15);
+    --amber: #fbbf24;
+    --amber-glow: rgba(251,191,36,0.15);
+    --red: #f87171;
+    --red-glow: rgba(248,113,113,0.15);
+    --purple: #c084fc;
+    --purple-glow: rgba(192,132,252,0.15);
+    --blue: #60a5fa;
+    --blue-glow: rgba(96,165,250,0.15);
+    --text: #d4edda;
+    --text-muted: #5a8a5a;
+    --text-dim: #2a4a2a;
+    --mono: 'Share Tech Mono', monospace;
+    --display: 'Syne', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid noise background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(74,222,128,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(74,222,128,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap {
+    position: relative;
+    z-index: 1;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px 20px 60px;
+  }
+
+  /* ── Header ── */
+  .header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+  .header-badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--green);
+    border: 1px solid var(--green-dim);
+    padding: 4px 14px;
+    border-radius: 2px;
+    margin-bottom: 16px;
+    background: var(--green-glow);
+  }
+  .header h1 {
+    font-family: var(--display);
+    font-size: clamp(22px, 4vw, 38px);
+    font-weight: 800;
+    color: var(--text);
+    line-height: 1.15;
+    letter-spacing: -0.5px;
+  }
+  .header h1 span { color: var(--green); }
+  .header p {
+    margin-top: 10px;
+    color: var(--text-muted);
+    font-size: 12px;
+    letter-spacing: 1px;
+  }
+
+  /* ── Layer labels ── */
+  .layer-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .layer-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── Connector arrows ── */
+  .connector {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    margin: 6px 0;
+  }
+  .conn-line {
+    width: 2px;
+    height: 22px;
+    position: relative;
+    overflow: visible;
+  }
+  .conn-line-inner {
+    position: absolute;
+    left: 0; top: 0;
+    width: 2px;
+    height: 100%;
+    background: linear-gradient(to bottom, transparent, var(--green-dim), transparent);
+    animation: flowDown 1.5s linear infinite;
+  }
+  @keyframes flowDown {
+    0% { background-position: 0 0; }
+    100% { background-position: 0 100%; }
+  }
+  .conn-label {
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    background: var(--bg);
+    padding: 1px 8px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .conn-arrow {
+    color: var(--green-dim);
+    font-size: 14px;
+    line-height: 1;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:1} }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--layer1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s, box-shadow 0.3s, transform 0.2s;
+    cursor: default;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.3s;
+    border-radius: 10px;
+  }
+  .card:hover { transform: translateY(-2px); }
+  .card:hover::before { opacity: 1; }
+
+  .card.green { --c: var(--green); --g: var(--green-glow); --cd: var(--green-dim); }
+  .card.teal  { --c: var(--teal);  --g: var(--teal-glow);  --cd: #0d6b63; }
+  .card.amber { --c: var(--amber); --g: var(--amber-glow); --cd: #92400e; }
+  .card.red   { --c: var(--red);   --g: var(--red-glow);   --cd: #991b1b; }
+  .card.purple{ --c: var(--purple);--g: var(--purple-glow);--cd: #6b21a8; }
+  .card.blue  { --c: var(--blue);  --g: var(--blue-glow);  --cd: #1d4ed8; }
+
+  .card { border-color: var(--border); }
+  .card::before { background: var(--g, var(--green-glow)); }
+  .card:hover { border-color: var(--c, var(--green)); box-shadow: 0 0 24px var(--g, var(--green-glow)); }
+
+  .card-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .card-icon {
+    width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--g, var(--green-glow));
+    border: 1px solid var(--cd, var(--green-dim));
+    border-radius: 6px;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+  .card-title {
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--c, var(--green));
+    letter-spacing: 0.3px;
+  }
+  .card-sub {
+    font-size: 9px;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-top: 1px;
+  }
+
+  .tag-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .tag {
+    font-size: 9px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    border: 1px solid var(--cd, var(--green-dim));
+    color: var(--c, var(--green));
+    background: var(--g, var(--green-glow));
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+
+  .item-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-top: 6px;
+  }
+  .item-list li {
+    font-size: 10px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    line-height: 1.4;
+  }
+  .item-list li::before {
+    content: '›';
+    color: var(--c, var(--green));
+    flex-shrink: 0;
+    font-size: 12px;
+    line-height: 1.2;
+  }
+
+  /* ── Grid layouts ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+
+  /* ── IRIV Core card — special ── */
+  .iriv-core {
+    background: var(--layer2);
+    border: 1px solid var(--border-bright);
+    border-radius: 14px;
+    padding: 24px;
+    position: relative;
+    box-shadow: 0 0 40px rgba(74,222,128,0.08), inset 0 1px 0 rgba(74,222,128,0.1);
+  }
+  .iriv-core::before {
+    content: 'EDGE PROCESSING UNIT';
+    position: absolute;
+    top: -9px; left: 50%; transform: translateX(-50%);
+    font-size: 8px;
+    letter-spacing: 4px;
+    color: var(--green);
+    background: var(--layer2);
+    padding: 0 12px;
+    white-space: nowrap;
+  }
+  .iriv-title {
+    font-family: var(--display);
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--green);
+    text-align: center;
+    margin-bottom: 4px;
+    letter-spacing: -0.3px;
+  }
+  .iriv-sub {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-align: center;
+    margin-bottom: 20px;
+    letter-spacing: 1px;
+  }
+  .iriv-specs {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+  .iriv-spec {
+    font-size: 8px;
+    letter-spacing: 1px;
+    color: var(--green);
+    background: rgba(74,222,128,0.08);
+    border: 1px solid var(--green-dim);
+    padding: 3px 10px;
+    border-radius: 2px;
+  }
+
+  /* ── Animated data flow ── */
+  .flow-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+    animation: flowPulse 2s ease-in-out infinite;
+  }
+  @keyframes flowPulse {
+    0%,100%{transform:scale(0.8);opacity:0.4}
+    50%{transform:scale(1.2);opacity:1}
+  }
+
+  /* ── Legend ── */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: center;
+    margin-top: 40px;
+    padding: 16px;
+    background: var(--layer1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  /* ── Divider ── */
+  .h-divider {
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--border), transparent);
+    margin: 20px 0;
+  }
+
+  /* ── Tooltip ── */
+  .tooltip-wrap { position: relative; }
+  .tooltip-wrap:hover .tooltip { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  .tooltip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%; transform: translateX(-50%) translateY(4px);
+    background: #0f1f0f;
+    border: 1px solid var(--border-bright);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 10px;
+    color: var(--text);
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+    z-index: 100;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    min-width: 160px;
+    white-space: normal;
+    text-align: left;
+  }
+
+  @media (max-width: 700px) {
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  }
+  @media (min-width: 701px) and (max-width: 900px) {
+    .grid-3, .grid-4 { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-badge">FYP · System Architecture</div>
+    <h1>IoT Oil Palm <span>Monitoring &amp; Disease Detection</span><br>System</h1>
+    <p>IRIV PiControl Industry 4.0 AgriBox v2 · Raspberry Pi CM4 · Next.js · FastAPI · MySQL</p>
+  </div>
+
+  <!-- ═══════════════════════════════ LAYER 1: FIELD -->
+  <div class="layer-label">① Field Layer — Physical Sensors &amp; Actuators</div>
+  <div class="grid-2" style="gap:12px">
+
+    <!-- Sensors -->
+    <div class="card green tooltip-wrap">
+      <div class="tooltip">Connected via RS485 (Modbus RTU) or 4–20mA analog inputs on the IRIV AgriBox v2</div>
+      <div class="card-top">
+        <div class="card-icon">📡</div>
+        <div>
+          <div class="card-title">Sensor Array</div>
+          <div class="card-sub">Input Devices</div>
+        </div>
+      </div>
+      <div class="grid-2" style="gap:8px; margin-top:4px">
+        <div>
+          <ul class="item-list">
+            <li>DHT22 / SHT31 — Temperature &amp; Humidity</li>
+            <li>Capacitive Soil Moisture Sensor</li>
+            <li>EC Sensor (4–20mA via ADS1115)</li>
+          </ul>
+        </div>
+        <div>
+          <ul class="item-list">
+            <li>USB/CSI Camera — Fruit &amp; Trunk Photos</li>
+            <li>Light Sensor (LDR / BH1750)</li>
+            <li>Rain Gauge (optional)</li>
+          </ul>
+        </div>
+      </div>
+      <div class="tag-row">
+        <span class="tag">RS485 / Modbus RTU</span>
+        <span class="tag">Analog 4–20mA</span>
+        <span class="tag">I²C</span>
+        <span class="tag">GPIO</span>
+      </div>
+    </div>
+
+    <!-- Actuators -->
+    <div class="card amber tooltip-wrap">
+      <div class="tooltip">Controlled via IRIV Digital Output relays (up to 50V isolated). Triggered by schedule or sensor threshold rules.</div>
+      <div class="card-top">
+        <div class="card-icon">⚙️</div>
+        <div>
+          <div class="card-title">Actuators &amp; Control</div>
+          <div class="card-sub">Output Devices</div>
+        </div>
+      </div>
+      <div class="grid-2" style="gap:8px; margin-top:4px">
+        <div>
+          <ul class="item-list">
+            <li>Drip Irrigation Pump</li>
+            <li>Fertigation / Fertilizer Pump</li>
+            <li>Mist Cooling System</li>
+          </ul>
+        </div>
+        <div>
+          <ul class="item-list">
+            <li>Grow Lighting (LED)</li>
+            <li>Solenoid Valves</li>
+            <li>Water Level Float</li>
+          </ul>
+        </div>
+      </div>
+      <div class="tag-row">
+        <span class="tag">Digital Output Relays</span>
+        <span class="tag">PWM Control</span>
+        <span class="tag">Schedule / Threshold</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Connector -->
+  <div class="connector">
+    <div class="conn-line"><div class="conn-line-inner"></div></div>
+    <span class="conn-label">Wired I/O · RS485 · Analog Signals · GPIO</span>
+    <div class="conn-arrow">▼</div>
+  </div>
+
+  <!-- ═══════════════════════════════ LAYER 2: IRIV CORE -->
+  <div class="layer-label">② Edge Layer — IRIV PiControl AgriBox v2</div>
+  <div class="iriv-core">
+    <div class="iriv-title">IRIV PiControl Industry 4.0 AgriBox v2</div>
+    <div class="iriv-sub">Raspberry Pi CM4 · Quad-core Cortex-A72 1.5GHz · 4GB RAM · 32GB eMMC</div>
+    <div class="iriv-specs">
+      <span class="iriv-spec">4× Analog In</span>
+      <span class="iriv-spec">Isolated DI/DO 50V</span>
+      <span class="iriv-spec">RS232 / RS485</span>
+      <span class="iriv-spec">WiFi + Ethernet</span>
+      <span class="iriv-spec">USB + CSI Camera</span>
+    </div>
+
+    <div class="grid-3" style="gap:10px">
+
+      <div class="card green">
+        <div class="card-top">
+          <div class="card-icon" style="font-size:13px">🐍</div>
+          <div>
+            <div class="card-title">Data Collector</div>
+            <div class="card-sub">Python Script</div>
+          </div>
+        </div>
+        <ul class="item-list">
+          <li>Poll sensors every 30s via Modbus / GPIO</li>
+          <li>Parse &amp; validate readings</li>
+          <li>Write to MySQL database</li>
+          <li>Trigger alerts on threshold breach</li>
+        </ul>
+        <div class="tag-row">
+          <span class="tag">pymodbus</span>
+          <span class="tag">RPi.GPIO</span>
+          <span class="tag">schedule</span>
+        </div>
+      </div>
+
+      <div class="card purple">
+        <div class="card-top">
+          <div class="card-icon" style="font-size:13px">🧠</div>
+          <div>
+            <div class="card-title">AI Inference</div>
+            <div class="card-sub">Disease Detection</div>
+          </div>
+        </div>
+        <ul class="item-list">
+          <li>Capture image via USB/CSI cam</li>
+          <li>Preprocess with OpenCV (224×224)</li>
+          <li>Run MobileNetV2 TFLite model</li>
+          <li>Output: disease label + confidence %</li>
+          <li>Save result + image to MySQL</li>
+        </ul>
+        <div class="tag-row">
+          <span class="tag">TFLite</span>
+          <span class="tag">OpenCV</span>
+          <span class="tag">MobileNetV2</span>
+        </div>
+      </div>
+
+      <div class="card teal">
+        <div class="card-top">
+          <div class="card-icon" style="font-size:13px">⚡</div>
+          <div>
+            <div class="card-title">FastAPI Backend</div>
+            <div class="card-sub">REST API Server</div>
+          </div>
+        </div>
+        <ul class="item-list">
+          <li>Expose sensor data as JSON API</li>
+          <li>Serve disease detection results</li>
+          <li>Handle dashboard auth (JWT)</li>
+          <li>Trigger manual actions / overrides</li>
+          <li>WebSocket for real-time push</li>
+        </ul>
+        <div class="tag-row">
+          <span class="tag">FastAPI</span>
+          <span class="tag">Uvicorn</span>
+          <span class="tag">JWT</span>
+          <span class="tag">WebSocket</span>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="h-divider"></div>
+
+    <!-- MySQL -->
+    <div class="card blue" style="margin-bottom: 0">
+      <div class="card-top">
+        <div class="card-icon">🗄️</div>
+        <div>
+          <div class="card-title">MySQL Database — Local on IRIV</div>
+          <div class="card-sub">Persistent Storage</div>
+        </div>
+      </div>
+      <div class="grid-4" style="margin-top:6px">
+        <div>
+          <div style="font-size:9px;color:var(--blue);margin-bottom:4px;letter-spacing:1px">SENSORS</div>
+          <ul class="item-list">
+            <li>temperature</li>
+            <li>humidity</li>
+            <li>soil_moisture</li>
+            <li>ec_level</li>
+            <li>timestamp</li>
+          </ul>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--blue);margin-bottom:4px;letter-spacing:1px">DISEASE</div>
+          <ul class="item-list">
+            <li>image_path</li>
+            <li>disease_label</li>
+            <li>confidence</li>
+            <li>severity</li>
+            <li>tree_id</li>
+          </ul>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--blue);margin-bottom:4px;letter-spacing:1px">ALERTS</div>
+          <ul class="item-list">
+            <li>alert_type</li>
+            <li>message</li>
+            <li>acknowledged</li>
+            <li>triggered_at</li>
+          </ul>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--blue);margin-bottom:4px;letter-spacing:1px">AUTOMATION</div>
+          <ul class="item-list">
+            <li>rule_name</li>
+            <li>trigger_type</li>
+            <li>threshold</li>
+            <li>relay_pin</li>
+            <li>last_triggered</li>
+          </ul>
+        </div>
+      </div>
+      <div class="tag-row" style="margin-top:12px">
+        <span class="tag">MySQL 8.0</span>
+        <span class="tag">SQLAlchemy ORM</span>
+        <span class="tag">Local Storage</span>
+        <span class="tag">Indexed Timestamps</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Connector -->
+  <div class="connector">
+    <div class="conn-line"><div class="conn-line-inner"></div></div>
+    <span class="conn-label">Cloudflared Tunnel · HTTPS · Encrypted · Zero Port Forwarding</span>
+    <div class="conn-arrow">▼</div>
+  </div>
+
+  <!-- ═══════════════════════════════ LAYER 3: REMOTE ACCESS -->
+  <div class="layer-label">③ Network Layer — Secure Remote Access</div>
+  <div class="card teal" style="margin-bottom: 0">
+    <div class="card-top">
+      <div class="card-icon">🔐</div>
+      <div>
+        <div class="card-title">Cloudflared Tunnel</div>
+        <div class="card-sub">Zero Trust Remote Access — Free</div>
+      </div>
+    </div>
+    <div class="grid-3" style="margin-top:8px; gap:10px">
+      <ul class="item-list">
+        <li>No port forwarding needed</li>
+        <li>Access from any browser, anywhere</li>
+      </ul>
+      <ul class="item-list">
+        <li>Auto HTTPS / TLS certificates</li>
+        <li>Works behind university firewalls</li>
+      </ul>
+      <ul class="item-list">
+        <li>yourdomain.trycloudflare.com</li>
+        <li>Routes to FastAPI on IRIV locally</li>
+      </ul>
+    </div>
+    <div class="tag-row">
+      <span class="tag">cloudflared daemon</span>
+      <span class="tag">Tunnel UUID</span>
+      <span class="tag">Zero Config TLS</span>
+      <span class="tag">Free Tier</span>
+    </div>
+  </div>
+
+  <!-- Connector -->
+  <div class="connector">
+    <div class="conn-line"><div class="conn-line-inner"></div></div>
+    <span class="conn-label">REST API · WebSocket · HTTPS</span>
+    <div class="conn-arrow">▼</div>
+  </div>
+
+  <!-- ═══════════════════════════════ LAYER 4: DASHBOARD -->
+  <div class="layer-label">④ Presentation Layer — Custom Next.js Dashboard</div>
+  <div class="grid-2" style="gap:12px">
+
+    <div class="card green">
+      <div class="card-top">
+        <div class="card-icon">🖥️</div>
+        <div>
+          <div class="card-title">Next.js Dashboard</div>
+          <div class="card-sub">Frontend — Your Custom Build</div>
+        </div>
+      </div>
+      <ul class="item-list">
+        <li>Real-time sensor charts (Recharts / Chart.js)</li>
+        <li>Disease detection results + captured images</li>
+        <li>Alert feed with acknowledge controls</li>
+        <li>Automation panel — toggle relays remotely</li>
+        <li>Historical data reports &amp; CSV export</li>
+        <li>Mobile responsive — works on phone</li>
+        <li>Login auth with JWT tokens</li>
+      </ul>
+      <div class="tag-row">
+        <span class="tag">Next.js 14</span>
+        <span class="tag">React</span>
+        <span class="tag">Tailwind CSS</span>
+        <span class="tag">Recharts</span>
+        <span class="tag">SWR / React Query</span>
+        <span class="tag">WebSocket</span>
+      </div>
+    </div>
+
+    <div class="card red">
+      <div class="card-top">
+        <div class="card-icon">📲</div>
+        <div>
+          <div class="card-title">Telegram Alert Bot</div>
+          <div class="card-sub">Instant Notifications</div>
+        </div>
+      </div>
+      <ul class="item-list">
+        <li>Push alert when soil moisture &lt; 40%</li>
+        <li>Disease detected → photo + label + confidence</li>
+        <li>Temperature spike warning</li>
+        <li>Pump ON/OFF confirmation messages</li>
+        <li>Daily crop health summary report</li>
+        <li>Inline buttons to acknowledge alerts</li>
+      </ul>
+      <div class="tag-row">
+        <span class="tag">Telegram Bot API</span>
+        <span class="tag">python-telegram-bot</span>
+        <span class="tag">Inline Keyboards</span>
+        <span class="tag">Photo Messages</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════════ LAYER 5: AI TRAINING -->
+  <div class="connector" style="margin-top:24px">
+    <div class="conn-line"><div class="conn-line-inner"></div></div>
+    <div class="conn-arrow">▼</div>
+  </div>
+
+  <div class="layer-label">⑤ AI Training Pipeline — Offline (Google Colab → IRIV Deploy)</div>
+  <div class="grid-3" style="gap:12px">
+
+    <div class="card amber">
+      <div class="card-top">
+        <div class="card-icon">📸</div>
+        <div>
+          <div class="card-title">Dataset</div>
+          <div class="card-sub">Image Collection</div>
+        </div>
+      </div>
+      <ul class="item-list">
+        <li>200+ images per class</li>
+        <li>5 classes: Healthy, Ganoderma, Bud Rot, Crown Disease, Fruit Bunch Rot</li>
+        <li>Kaggle + own field photos</li>
+        <li>Labelled with Roboflow</li>
+      </ul>
+      <div class="tag-row">
+        <span class="tag">Roboflow</span>
+        <span class="tag">Kaggle</span>
+        <span class="tag">Field Photos</span>
+      </div>
+    </div>
+
+    <div class="card purple">
+      <div class="card-top">
+        <div class="card-icon">🧑‍💻</div>
+        <div>
+          <div class="card-title">Training</div>
+          <div class="card-sub">Google Colab GPU</div>
+        </div>
+      </div>
+      <ul class="item-list">
+        <li>MobileNetV2 transfer learning</li>
+        <li>Phase 1: Train top layers (10 epochs)</li>
+        <li>Phase 2: Fine-tune last 30 layers (20 epochs)</li>
+        <li>Data augmentation pipeline</li>
+        <li>Export → model.h5</li>
+      </ul>
+      <div class="tag-row">
+        <span class="tag">TensorFlow/Keras</span>
+        <span class="tag">MobileNetV2</span>
+        <span class="tag">Colab T4 GPU</span>
+      </div>
+    </div>
+
+    <div class="card teal">
+      <div class="card-top">
+        <div class="card-icon">🚀</div>
+        <div>
+          <div class="card-title">Deployment</div>
+          <div class="card-sub">Edge Inference on IRIV</div>
+        </div>
+      </div>
+      <ul class="item-list">
+        <li>Convert model.h5 → model.tflite</li>
+        <li>Quantize for smaller size (~5MB)</li>
+        <li>Copy to IRIV via SCP/SSH</li>
+        <li>Python inference wrapper script</li>
+        <li>&lt; 3s inference time on Pi CM4</li>
+      </ul>
+      <div class="tag-row">
+        <span class="tag">TFLite Converter</span>
+        <span class="tag">INT8 Quantization</span>
+        <span class="tag">SSH Deploy</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#4ade80"></div> Sensor / Data Input</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#fbbf24"></div> Actuator / Control</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#c084fc"></div> AI / Machine Learning</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#2dd4bf"></div> Network / API</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#60a5fa"></div> Database</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f87171"></div> Notifications</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#4ade80; opacity:0.5"></div> Dashboard / UI</div>
+  </div>
+
+  <div style="text-align:center; margin-top:24px; font-size:9px; color:var(--text-dim); letter-spacing:2px">
+    IOT OIL PALM FYP · IRIV PICONTROL AGRIBOX V2 · SYSTEM ARCHITECTURE v1.0
+  </div>
+
+</div>
+</body>
+</html>
