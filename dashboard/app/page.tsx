@@ -39,8 +39,9 @@ export default function OverviewPage() {
   const [diseases, setDiseases] = useState<Disease[]>([])
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date())
+  const [isOnline, setIsOnline] = useState(true)
 
-  const fetchData = async () => {
+  /*const fetchData = async () => {
     try {
       const [sensorRes, alertRes, diseaseRes] = await Promise.all([
         sensorApi.getLatest(),
@@ -57,6 +58,29 @@ export default function OverviewPage() {
       setLoading(false)
     }
   }
+    */
+
+  const fetchData = async () => {
+    try {
+      const [sensorRes, alertRes, diseaseRes] = await Promise.all([
+        sensorApi.getLatest(),
+        alertApi.getAll(),
+        diseaseApi.getHistory(5),
+      ])
+      setSensors(sensorRes.data)
+      setAlerts(alertRes.data)
+      setDiseases(diseaseRes.data)
+      setLastUpdated(new Date())
+      setIsOnline(true)
+    } catch (err) {
+      console.error('Failed to fetch data:', err)
+      setIsOnline(false)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+
 
   const handleAcknowledge = async (id: number) => {
     try {
@@ -116,7 +140,7 @@ export default function OverviewPage() {
     <div className="space-y-6">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Overview</h1>
           <p className="text-gray-400 text-sm mt-1">
@@ -134,7 +158,32 @@ export default function OverviewPage() {
             <RefreshCw size={14} />
           </button>
         </div>
-      </div>
+      </div> */}
+
+      {/* Header */}
+<div className="flex items-center justify-between">
+  <div>
+    <h1 className="text-2xl font-bold text-white">Overview</h1>
+    <p className="text-gray-400 text-sm mt-1">
+      Oil Palm IoT Monitoring System
+    </p>
+  </div>
+  <div className="flex items-center gap-2 text-xs">
+    <Wifi size={14} className={isOnline ? 'text-green-400' : 'text-red-400'} />
+    <span className={isOnline ? 'text-green-400' : 'text-red-400 font-semibold'}>
+      {isOnline
+        ? `Live — updated ${formatDistanceToNow(lastUpdated)} ago`
+        : '⚠️ OFFLINE — Cannot reach server'}
+    </span>
+    <ThemeToggle />
+    <button
+      onClick={fetchData}
+      className="p-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors"
+    >
+      <RefreshCw size={14} className={isOnline ? 'text-gray-400' : 'text-red-400'} />
+    </button>
+  </div>
+</div>
 
       {/* Sensor Cards */}
       {sensors ? (
@@ -201,10 +250,12 @@ export default function OverviewPage() {
             {diseases.length}
           </div>
         </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <div className="text-sm text-gray-400 mb-1">System Status</div>
-          <div className="text-3xl font-bold text-green-400">Online</div>
-        </div>
+        <div className={`rounded-xl border p-4 ${isOnline ? 'bg-gray-900 border-gray-800' : 'bg-red-500/10 border-red-500/30'}`}>
+  <div className="text-sm text-gray-400 mb-1">System Status</div>
+  <div className={`text-3xl font-bold ${isOnline ? 'text-green-400' : 'text-red-400'}`}>
+    {isOnline ? 'Online' : 'Offline'}
+  </div>
+</div>
       </div>
 
       {/* Alerts + Disease side by side */}
