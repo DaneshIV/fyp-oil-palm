@@ -27,21 +27,20 @@
 - [x] Supabase RLS security enabled on all 4 tables
 - [x] Next.js 16 dashboard — all 5 pages complete
 - [x] Telegram bot — all alert types working
-- [x] AI Model v1 — YOLOv8n trained (mAP50 76.3%) — original 3 datasets
-- [x] AI Model v2 — YOLOv8s trained (mAP50 67.1%) — comparison only
-- [x] Dataset v2 — 10 Roboflow datasets + Kaggle merged (7,748 images)
+- [x] AI Model v1 — YOLOv8n (mAP50 59.1% standardised)
+- [x] AI Model v2 — YOLOv8s comparison (mAP50 52.3% standardised)
+- [x] AI Model v3 — YOLOv8n FINAL (mAP50 71.5% standardised) ✅
+- [x] All 3 models evaluated on same test set
+- [x] Evaluation charts + confusion matrix generated
+- [x] V3 ONNX exported (best_v3.onnx)
 - [x] Git LFS for model weights
 - [x] 3x backups — GitHub, D drive, Google Drive
 - [x] Cloudflared installed
 - [x] IRIV hardware scripts — all 4 complete + tested in simulation
 - [x] Disease detection test page (webcam + upload)
 
-### 🔲 In Progress
-- [ ] AI Model v3 — YOLOv8n retraining with v2 dataset (TRAINING NOW)
-
 ### 🔲 Todo
-- [ ] Evaluate v3 model results
-- [ ] Export v3 to ONNX
+- [ ] Annotate Kaggle images in Label Studio → retrain v4
 - [ ] Fix webcam detection page
 - [ ] Cloudflared tunnel test — need home WiFi
 - [ ] IRIV hardware arrives → deploy + test
@@ -49,159 +48,63 @@
 
 ---
 
-## 🗂️ Project Structure
+## 🤖 AI Model — FINAL RESULTS
+
+### ⚠️ Production Model = V3
 
 ```
-fyp-oil-palm/
-├── CLAUDE.md
-├── README.md
-├── .gitignore
-├── .env                               ← Never commit!
-├── start_fyp.ps1                      ← Start all services
-├── demo_data.py                       ← Insert demo sensor data
-├── live_sensors.py                    ← Continuous live sensor updates
-├── add_alerts.py                      ← Insert demo alerts
-├── add_diseases.py                    ← Insert demo disease detections
-├── check_versions.py                  ← Check Roboflow dataset versions
-├── generate_versions.py               ← Generate Roboflow dataset versions
-│
-├── ai_model/
-│   ├── data.yaml                      ← Points to balanced (v1 datasets)
-│   ├── data_v2.yaml                   ← Points to balanced_v2 (v2 datasets)
-│   ├── datasets/
-│   │   ├── roboflow/                  ← Original 3 datasets (v1)
-│   │   │   ├── palm_leaf_ganoderma/   ← 440 images
-│   │   │   ├── oil_palm_health/       ← 2,073 images
-│   │   │   └── tree_health_detection/ ← 2,651 images
-│   │   ├── roboflow_v2/               ← New 10 datasets (v2)
-│   │   │   ├── palm_leaf_disease/     ← 50 images — Bercak_Daun, Defisiensi_Kalium, Karat_Daun
-│   │   │   ├── indikasi_ganoderma/    ← 730 images — Gejala Awal, Sehat
-│   │   │   ├── binus_ganoderma_1/     ← 425 images — Ganoderma, Ganoderma Fungus
-│   │   │   ├── binus_ganoderma_2/     ← 425 images — Ganoderma, Ganoderma Fungus
-│   │   │   ├── oil_palm_tree/         ← SKIPPED — only palmTree class
-│   │   │   ├── palm_leaves_disease/   ← SKIPPED — classification format
-│   │   │   ├── tree_health_detection/ ← 2,651 images — Healthy, Yellow, Dead, Small
-│   │   │   ├── palm_oil_onmsi/        ← 73 images — Disease-Spot, Initial, healthy
-│   │   │   ├── palm_leaf_ganoderma/   ← 74 images — Healthy, Infected, Initial Infection
-│   │   │   └── oil_palm_health/       ← 2,073 images — Healthy, Unhealthy
-│   │   ├── combined/                  ← Merged v1 (5,725 images)
-│   │   ├── combined_v2/               ← Merged v2 (6,612 images)
-│   │   ├── balanced/                  ← Balanced v1 (used for v1/v2 training)
-│   │   └── balanced_v2/               ← Balanced v2 (used for v3 training)
-│   │       ├── train/ — healthy:4337, ganoderma:1803, unhealthy:2180, immature:1918
-│   │       ├── val/   — healthy:1031, ganoderma:306, unhealthy:464, immature:430
-│   │       └── test/  — healthy:535, ganoderma:167, unhealthy:239, immature:240
-│   ├── models/
-│   │   ├── best.pt                    ← YOLOv8n v1 weights (6MB) — mAP50 76.3%
-│   │   ├── best.onnx                  ← YOLOv8n v1 ONNX (11.7MB)
-│   │   ├── best_v2_yolov8s.pt         ← YOLOv8s comparison (mAP50 67.1%)
-│   │   └── best_v3.pt                 ← YOLOv8n v3 (TRAINING NOW)
-│   ├── runs/
-│   │   ├── oil_palm_v1/               ← YOLOv8n v1 training results
-│   │   ├── oil_palm_v2/               ← YOLOv8s v2 training results
-│   │   ├── oil_palm_v3/               ← YOLOv8n v3 training results (IN PROGRESS)
-│   │   └── evaluation/                ← Confusion matrix + charts ✅
-│   └── training/
-│       ├── train.py                   ← YOLOv8 training script ✅
-│       ├── prepare_dataset.py         ← Dataset merger v1 ✅
-│       ├── balance_dataset.py         ← Dataset balancer v1 ✅
-│       ├── prepare_dataset.py         ← Dataset merger v2 ✅
-│       ├── balance_dataset_v2.py      ← Dataset balancer v2 ✅
-│       ├── download_datasets.py       ← Roboflow bulk downloader ✅
-│       ├── evaluate.py                ← Evaluation + charts ✅
-│       └── detect.py                  ← Single image inference
-│
-├── backend/
-│   ├── main.py                        ← FastAPI (port 8000) ✅
-│   ├── routes/
-│   │   ├── sensors.py                 ✅
-│   │   ├── disease.py                 ✅ includes /detect endpoint
-│   │   ├── alerts.py                  ✅
-│   │   └── automation.py              ✅
-│   ├── schemas/
-│   │   └── schemas.py                 ✅
-│   └── database/
-│       ├── connection.py              ✅
-│       ├── init.sql                   ✅
-│       └── supabase_sync.py           ✅
-│
-├── dashboard/                         ← Next.js 16 (port 3000)
-│   ├── app/
-│   │   ├── page.tsx                   ✅ Overview (offline/online indicator)
-│   │   ├── sensors/page.tsx           ✅
-│   │   ├── disease/page.tsx           ✅
-│   │   ├── disease/detect/page.tsx    ✅ Upload + webcam detection
-│   │   ├── automation/page.tsx        ✅
-│   │   └── reports/page.tsx           ✅
-│   ├── components/ui/
-│   │   ├── Sidebar.tsx                ✅ includes AI Test link
-│   │   ├── SensorCard.tsx             ✅
-│   │   ├── Skeleton.tsx               ✅
-│   │   ├── LiveIndicator.tsx          ✅
-│   │   └── ThemeToggle.tsx            ✅
-│   └── lib/
-│       ├── api.ts                     ✅
-│       └── supabase.ts                ✅
-│
-├── iriv_scripts/                      ← All tested in simulation ✅
-│   ├── sensor_collector.py            ✅ RS485 + simulation mode
-│   ├── camera_capture.py              ✅ USB/CSI + simulation mode
-│   ├── inference_runner.py            ✅ ONNX inference + simulation
-│   ├── telegram_bot.py                ✅ All alert types working
-│   └── automation_controller.py       ✅ Relay control + simulation
-│
-└── docs/
-    └── architecture_diagram.html      ✅
+File:      ai_model/models/best_v3.pt   (PyTorch)
+ONNX:      ai_model/models/best_v3.onnx (deployment)
 ```
-
----
-
-## 🔧 Hardware — IRIV PiControl AgriBox v2
-
-| Component | Detail |
-|---|---|
-| SoM | Raspberry Pi Compute Module 4 (CM4) |
-| CPU | Quad-core Cortex-A72 @ 1.5GHz |
-| RAM | 4GB LPDDR4 |
-| Storage | 32GB eMMC |
-| Connectivity | WiFi, Bluetooth 5.0, Gigabit Ethernet |
-| Serial | RS232 + RS485 (Modbus RTU) |
-| Analog Inputs | 4× isolated via ADS1115 ADC (I²C 0x48) |
-| Digital I/O | Isolated DI + DO up to 50V |
-| Camera | USB or CSI |
-| OS | Raspberry Pi OS |
-| Power | 24V DC |
-
-**RS485 port:** `/dev/ttyS0` (baud 9600, Modbus RTU)
-**ADS1115 I²C address:** `0x48`
-
----
-
-## 🤖 AI Model History
 
 ### Why 4 Classes (Not 5)
 Originally planned 5 classes: healthy, ganoderma, bud_rot, crown_disease, fruit_bunch_rot.
-Changed to 4 classes because insufficient labelled images existed for bud_rot, crown_disease,
-and fruit_bunch_rot as separate classes. These were merged into 'unhealthy'. 'immature' was
-added to prevent false positives on young palms.
+Changed to 4 because insufficient labelled images existed for bud_rot, crown_disease,
+and fruit_bunch_rot as separate classes. These were merged into 'unhealthy'.
+'immature' was added to prevent false positives on young palms.
+Future work: annotate Kaggle images to split unhealthy into specific classes.
 
 ### Class Definitions
 ```
-0: healthy    → Normal healthy palm — no disease symptoms
-1: ganoderma  → Ganoderma Basal Stem Rot — bracket fungus at trunk base (HIGH severity)
-2: unhealthy  → General disease — Bud Rot, Crown Disease, leaf yellowing (MEDIUM severity)
-3: immature   → Young/immature palm tree (LOW severity)
+0: healthy    → Normal healthy palm — no disease symptoms       (severity: None)
+1: ganoderma  → Ganoderma Basal Stem Rot — bracket fungus       (severity: High)
+2: unhealthy  → General disease — Bud Rot, Crown Disease etc    (severity: Medium)
+3: immature   → Young/immature palm tree                        (severity: Low)
 ```
 
-### Model Versions
-| Version | Architecture | Dataset | mAP50 | Status |
-|---|---|---|---|---|
-| v1 | YOLOv8n | 3 datasets, 5,725 images | 76.3% | ✅ Final model |
-| v2 | YOLOv8s | 3 datasets, 5,725 images | 67.1% | Comparison only |
-| v3 | YOLOv8n | 10 datasets, 7,748 images | TBD | 🔄 Training now |
+### 3-Model Comparison (Standardised Test Set — 670 images)
 
-### Dataset Sources (v2 — Current)
-| Dataset | Images | Classes Used |
+| Model | Architecture | Datasets | Images | mAP50 | mAP50-95 | Status |
+|---|---|---|---|---|---|---|
+| V1 | YOLOv8n | 3 | 5,725 | 59.1% | 52.1% | Baseline |
+| V2 | YOLOv8s | 3 | 5,725 | 52.3% | 46.1% | Architecture test |
+| V3 | YOLOv8n | 10 | 7,748 | **71.5%** | **65.0%** | ✅ PRODUCTION |
+
+### V3 Per-Class Results
+```
+Class        Precision  Recall   mAP50   mAP50-95
+healthy      0.979      0.891    0.944   0.908
+ganoderma    0.812      0.143    0.478   0.328
+unhealthy    0.978      0.993    0.994   0.952
+immature     0.542      0.617    0.444   0.411
+Overall      0.828      0.661    0.715   0.650
+```
+
+### Key Findings
+```
+1. Architecture size < Dataset diversity
+   V2 (YOLOv8s bigger) scored LOWER than V1 (YOLOv8n smaller)
+   → Bigger model needs more data to outperform
+
+2. Dataset diversity = best improvement
+   V3 same architecture as V1 but 10 datasets → +12.4% mAP50
+
+3. V3 is production model
+   71.5% mAP50 on standardised test — best overall performance
+```
+
+### Dataset Sources (V3 — 10 datasets)
+| Dataset | Images | Maps To |
 |---|---|---|
 | indikasi_ganoderma | 730 | Gejala Awal→ganoderma, Sehat→healthy |
 | binus_ganoderma_1 | 425 | Ganoderma→ganoderma |
@@ -211,13 +114,21 @@ added to prevent false positives on young palms.
 | palm_leaf_ganoderma | 74 | Healthy→healthy, Infected/Initial→ganoderma |
 | oil_palm_health | 2,073 | Healthy→healthy, Unhealthy→unhealthy |
 | palm_leaf_disease | 50 | All→unhealthy |
-| Kaggle palm-disease | ~275 | Dryness/Fungal/Magnesium/Scale→unhealthy (needs annotation) |
 
 ### Inference
 ```python
 from ultralytics import YOLO
-model = YOLO('ai_model/models/best.pt')  # use v3 when ready
+model = YOLO('ai_model/models/best_v3.pt')
 results = model('image.jpg', conf=0.5, iou=0.45)
+```
+
+### Training Scripts
+```
+prepare_dataset.py      → merge 10 Roboflow datasets
+balance_dataset_v2.py   → balance classes (target 2000/class)
+train.py                → YOLOv8 training (edit model + name + data yaml)
+evaluate.py             → evaluate all 3 models on same test set
+download_datasets.py    → bulk download from Roboflow
 ```
 
 ---
@@ -249,7 +160,7 @@ POST /sensors/
 GET  /disease/history?limit=20
 GET  /disease/latest
 POST /disease/
-POST /disease/detect           ← image upload + YOLOv8 inference
+POST /disease/detect     ← image upload + YOLOv8 inference
 GET  /alerts/
 GET  /alerts/count
 POST /alerts/{id}/acknowledge
@@ -362,20 +273,36 @@ git config --global http.sslVerify true
 
 ---
 
-## 🚀 IRIV Deployment Checklist (When Hardware Arrives)
+## 🔧 Hardware — IRIV PiControl AgriBox v2
+
+| Component | Detail |
+|---|---|
+| SoM | Raspberry Pi Compute Module 4 (CM4) |
+| CPU | Quad-core Cortex-A72 @ 1.5GHz |
+| RAM | 4GB LPDDR4 |
+| Storage | 32GB eMMC |
+| RS485 port | /dev/ttyS0 (baud 9600, Modbus RTU) |
+| ADS1115 | I²C address 0x48 |
+| Relay GPIO | Pin1→17, Pin2→27, Pin3→22, Pin4→23 |
+
+---
+
+## 🚀 IRIV Deployment Checklist
 
 ```
-1.  Flash Raspberry Pi OS to IRIV eMMC
+1.  Flash Raspberry Pi OS
 2.  Configure WiFi
-3.  Install Python dependencies (pip install fastapi uvicorn sqlalchemy pymysql pymodbus adafruit-ads1x15 python-telegram-bot opencv-python onnxruntime python-dotenv)
+3.  pip install fastapi uvicorn sqlalchemy pymysql pymodbus adafruit-ads1x15 python-telegram-bot opencv-python onnxruntime python-dotenv
 4.  Copy project files via SCP
 5.  Set up MySQL + run init.sql
 6.  Copy .env with credentials
-7.  Copy best_v3.onnx to ai_model/models/best.onnx
+7.  Copy best_v3.onnx → ai_model/models/best.onnx
 8.  Set up Cloudflared tunnel
-9.  Start services (uvicorn, sensor_collector, automation_controller)
-10. Set up systemd for auto-start
-11. Test full end-to-end
+9.  Start: uvicorn backend.main:app --host 0.0.0.0 --port 8000
+10. Start: python iriv_scripts/sensor_collector.py
+11. Start: python iriv_scripts/automation_controller.py
+12. Set up systemd for auto-start
+13. Test full end-to-end
 ```
 
 ---
@@ -385,7 +312,7 @@ git config --global http.sslVerify true
 1. Never use Node-RED — custom Next.js only
 2. Never use Grafana — charts in Next.js
 3. Backend is FastAPI — lightweight only
-4. IRIV uses ONNX model — NOT .pt
+4. IRIV uses ONNX — use best_v3.onnx NOT .pt
 5. Database is MySQL — NOT SQLite/PostgreSQL
 6. RS485 port is `/dev/ttyS0` on IRIV
 7. ADS1115 I²C is `0x48`
@@ -399,10 +326,10 @@ git config --global http.sslVerify true
 15. YOLOv8 inference: conf=0.5, iou=0.45
 16. Model classes: [healthy, ganoderma, unhealthy, immature]
 17. IRIV scripts have simulation mode — ON_IRIV = sys.platform == 'linux'
-18. Final model is YOLOv8n — v3 (best_v3.pt) when training completes
+18. PRODUCTION model is V3 — best_v3.pt / best_v3.onnx
 19. Supabase RLS enabled — use service role key for backend
 20. Git push on uni WiFi: disable sslVerify, push, re-enable
-21. Dataset v2 has 7,748 images from 8 Roboflow datasets
+21. Dataset v2 has 7,748 images from 10 Roboflow datasets
 22. data_v2.yaml points to balanced_v2 dataset
-23. Kaggle dataset (palm-disease-dataset) needs annotation before use
-24. /disease/detect endpoint accepts image upload → runs YOLOv8 → saves to DB
+23. /disease/detect endpoint accepts image upload → runs YOLOv8 → saves to DB
+24. evaluate.py evaluates all 3 models on same test set for fair comparison
