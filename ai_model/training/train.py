@@ -5,13 +5,13 @@ import yaml
 
 # ── CONFIG ──────────────────────────────────────────────────
 BASE_DIR = Path(__file__).parent.parent
-DATA_YAML = BASE_DIR / "data.yaml"
+DATA_YAML = BASE_DIR / "data_v2.yaml"
 MODELS_DIR = BASE_DIR / "models"
 MODELS_DIR.mkdir(exist_ok=True)
 
 # Training config
 CONFIG = {
-    "model":      "yolov8s.pt",   # nano — fastest, good for edge deployment
+    "model":      "yolov8n.pt",   # nano — fastest, good for edge deployment
     "data":       str(DATA_YAML),
     "epochs":     50,
     "imgsz":      640,
@@ -36,7 +36,7 @@ CONFIG = {
     "fliplr":     0.5,
     "mosaic":     1.0,
     "project":    str(BASE_DIR / "runs"),
-    "name":       "oil_palm_v2",
+    "name":       "oil_palm_v3",
     "exist_ok":   True,
     "pretrained": True,
     "verbose":    True,
@@ -103,7 +103,7 @@ def train():
 
     # Save best model to models folder
     best_model_src = Path(CONFIG["project"]) / CONFIG["name"] / "weights" / "best.pt"
-    best_model_dst = MODELS_DIR / "best_v2_yolov8s.pt"  # ← save separately!
+    best_model_dst = MODELS_DIR / "best_v3.pt"  # ← save separately!
 
     if best_model_src.exists():
         import shutil

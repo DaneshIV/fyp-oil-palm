@@ -9,14 +9,16 @@ import {
   Settings,
   BarChart3,
   Leaf,
+  Camera,
 } from 'lucide-react'
 
 const navItems = [
-  { href: '/',           label: 'Overview',   icon: LayoutDashboard },
-  { href: '/sensors',    label: 'Sensors',    icon: Activity },
-  { href: '/disease',    label: 'Disease AI', icon: Microscope },
-  { href: '/automation', label: 'Automation', icon: Settings },
-  { href: '/reports',    label: 'Reports',    icon: BarChart3 },
+  { href: '/',               label: 'Overview',   icon: LayoutDashboard },
+  { href: '/sensors',        label: 'Sensors',    icon: Activity },
+  { href: '/disease',        label: 'Disease AI', icon: Microscope },
+  { href: '/disease/detect', label: 'AI Test',    icon: Camera },      // ← ADD THIS
+  { href: '/automation',     label: 'Automation', icon: Settings },
+  { href: '/reports',        label: 'Reports',    icon: BarChart3 },
 ]
 
 export default function Sidebar() {

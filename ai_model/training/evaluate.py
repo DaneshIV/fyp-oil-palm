@@ -7,7 +7,7 @@ import yaml
 import json
 
 BASE_DIR    = Path(__file__).parent.parent
-DATA_YAML   = BASE_DIR / "data.yaml"
+DATA_YAML   = BASE_DIR / "data_v2.yaml"
 RESULTS_DIR = BASE_DIR / "runs" / "evaluation"
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -49,7 +49,7 @@ def plot_class_metrics(metrics_v1, metrics_v2=None):
     if metrics_v2:
         map50_v2 = [float(metrics_v2.box.ap50[i]) * 100 for i in range(len(CLASSES))]
         bars1 = ax1.bar(x - width/2, map50_v1, width, label="YOLOv8n", color="#60a5fa", alpha=0.8)
-        bars2 = ax1.bar(x + width/2, map50_v2, width, label="YOLOv8s", color="#4ade80", alpha=0.8)
+        bars2 = ax1.bar(x + width/2, map50_v2, width, label="YOLOv8n v3 (10 datasets)", color="#4ade80", alpha=0.8)
         ax1.legend()
     else:
         bars1 = ax1.bar(x, map50_v1, width=0.5, color=COLORS, alpha=0.85)
@@ -115,8 +115,8 @@ def plot_overall_comparison(metrics_v1, metrics_v2=None):
             float(metrics_v2.box.map50) * 100,
             float(metrics_v2.box.map) * 100,
         ]
-        ax.bar(x - width/2, v1_vals, width, label="YOLOv8n", color="#60a5fa", alpha=0.85)
-        ax.bar(x + width/2, v2_vals, width, label="YOLOv8s", color="#4ade80", alpha=0.85)
+        ax.bar(x - width/2, v1_vals, width, label="YOLOv8n v1 (3 datasets)", color="#60a5fa", alpha=0.85)
+        ax.bar(x + width/2, v2_vals, width, label="YOLOv8n v3 (10 datasets)", color="#4ade80", alpha=0.85)
         ax.legend(fontsize=11)
 
         # Add value labels
@@ -211,40 +211,52 @@ def save_results_json(metrics_v1, metrics_v2=None):
 def main():
     models_dir = BASE_DIR / "models"
     model_v1 = models_dir / "best.pt"
+    model_v2 = models_dir / "best_v2_yolov8s.pt"
+    model_v3 = models_dir / "best_v3.pt"
 
-    # Check if v2 exists (after retraining)
-    model_v2_path = BASE_DIR / "runs" / "oil_palm_v2" / "weights" / "best.pt"
-    model_v2 = model_v2_path if model_v2_path.exists() else None
-
-    print("\n🔬 Running evaluation...\n")
+    print("\n🔬 Running evaluation on all 3 models...\n")
 
     # Evaluate v1
     metrics_v1 = evaluate_model(model_v1)
-    print_report_table(metrics_v1, "YOLOv8n (oil_palm_v1)")
+    print_report_table(metrics_v1, "YOLOv8n v1 — 3 datasets (5,725 images)")
 
-    # Evaluate v2 if exists
+    # Evaluate v2
     metrics_v2 = None
-    if model_v2:
-        print("\n📦 YOLOv8s model found — evaluating v2...")
+    if model_v2.exists():
+        print("\n📦 Evaluating YOLOv8s v2...")
         metrics_v2 = evaluate_model(model_v2)
-        print_report_table(metrics_v2, "YOLOv8s (oil_palm_v2)")
+        print_report_table(metrics_v2, "YOLOv8s v2 — 3 datasets (5,725 images)")
 
-    # Generate charts
+    # Evaluate v3
+    metrics_v3 = None
+    if model_v3.exists():
+        print("\n📦 Evaluating YOLOv8n v3...")
+        metrics_v3 = evaluate_model(model_v3)
+        print_report_table(metrics_v3, "YOLOv8n v3 — 10 datasets (7,748 images)")
+
+    # Generate charts — use v1 vs v3 as main comparison
     print("\n📊 Generating charts...")
-    plot_class_metrics(metrics_v1, metrics_v2)
-    plot_overall_comparison(metrics_v1, metrics_v2)
-    save_results_json(metrics_v1, metrics_v2)
+    plot_class_metrics(metrics_v1, metrics_v3)
+    plot_overall_comparison(metrics_v1, metrics_v3)
+    save_results_json(metrics_v1, metrics_v3)
+
+    # Print final summary
+    print(f"\n{'=' * 65}")
+    print("📊 FINAL COMPARISON SUMMARY")
+    print(f"{'=' * 65}")
+    print(f"{'Model':<30} {'mAP50':>8} {'mAP50-95':>10}")
+    print(f"{'-' * 65}")
+    print(f"{'YOLOv8n v1 (3 datasets)':<30} {float(metrics_v1.box.map50)*100:>7.1f}% {float(metrics_v1.box.map)*100:>9.1f}%")
+    if metrics_v2:
+        print(f"{'YOLOv8s v2 (3 datasets)':<30} {float(metrics_v2.box.map50)*100:>7.1f}% {float(metrics_v2.box.map)*100:>9.1f}%")
+    if metrics_v3:
+        print(f"{'YOLOv8n v3 (10 datasets)':<30} {float(metrics_v3.box.map50)*100:>7.1f}% {float(metrics_v3.box.map)*100:>9.1f}%")
+    print(f"{'=' * 65}")
+    print(f"\n✅ Best model: V3 — YOLOv8n trained on 10 datasets")
 
     print(f"\n{'=' * 60}")
     print("✅ Evaluation complete!")
-    print(f"📁 All charts saved to: {RESULTS_DIR}")
-    print("\nFiles generated:")
-    print("  📊 class_metrics_comparison.png")
-    print("  📊 overall_comparison.png")
-    print("  📊 confusion_matrix.png (from YOLOv8 auto)")
-    print("  📊 PR_curve.png (from YOLOv8 auto)")
-    print("  📊 F1_curve.png (from YOLOv8 auto)")
-    print("  📄 evaluation_results.json")
+    print(f"📁 Charts saved to: {RESULTS_DIR}")
 
 if __name__ == "__main__":
     main()
