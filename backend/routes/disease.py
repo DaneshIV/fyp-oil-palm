@@ -56,7 +56,7 @@ async def detect_disease(file: UploadFile = File(...)):
 
         # Run inference
         from ultralytics import YOLO
-        model   = YOLO("ai_model/models/best.pt")
+        model   = YOLO("ai_model/models/best_v3.pt")
         results = model(str(filepath), conf=0.5, iou=0.45, verbose=False)
 
         CLASSES  = ["healthy", "ganoderma", "unhealthy", "immature"]
