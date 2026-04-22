@@ -4,6 +4,7 @@ from backend.routes import sensors, disease, alerts, automation
 from backend.database.connection import get_db
 from backend.database.supabase_sync import run_full_sync
 from sqlalchemy.orm import Session
+from backend.routes import security
 import asyncio
 import logging
 
@@ -28,6 +29,7 @@ app.include_router(sensors.router)
 app.include_router(disease.router)
 app.include_router(alerts.router)
 app.include_router(automation.router)
+app.include_router(security.router)
 
 @app.get("/")
 def root():

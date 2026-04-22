@@ -10,6 +10,7 @@ import {
   BarChart3,
   Leaf,
   Camera,
+  Shield,
 } from 'lucide-react'
 
 const navItems = [
@@ -17,6 +18,7 @@ const navItems = [
   { href: '/sensors',        label: 'Sensors',    icon: Activity },
   { href: '/disease',        label: 'Disease AI', icon: Microscope },
   { href: '/disease/detect', label: 'AI Test',    icon: Camera },      // ← ADD THIS
+  { href: '/security ',        label: 'Security',  icon: Shield},      // ← Newly ADDED
   { href: '/automation',     label: 'Automation', icon: Settings },
   { href: '/reports',        label: 'Reports',    icon: BarChart3 },
 ]
