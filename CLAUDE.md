@@ -7,11 +7,9 @@
 
 ## 🌴 Project Overview
 
-**Project Title:** IoT-Based Oil Palm Tree Monitoring and Fruit Disease Detection System
-**Developer:** Danesh
+**Project Title:** AN INTEGRATED IOT BASED SMART MONITORING,AUTOMATION & SECURITY SYSTEM FOR OIL PALM TREE
+**Developer:** Danesh Muthu Krisnan
 **Type:** Final Year Project (FYP)
-**Supervisor:** Dr. Mohd Kufaisal Bin Mohd Sidik
-**University:** Universiti Teknologi Malaysia (UTM)
 **Hardware:** IRIV PiControl Industry 4.0 AgriBox v2 (Raspberry Pi CM4-based industrial controller by Cytron Malaysia)
 **GitHub:** https://github.com/DaneshIV/fyp-oil-palm
 
@@ -24,7 +22,7 @@
 - [x] Virtual environment (fyp_env) — Python 3.12
 - [x] PyTorch + CUDA 12.1 (RTX 3060 Laptop confirmed working)
 - [x] MySQL database (fyp_oil_palm) — 4 tables
-- [x] FastAPI backend — all endpoints working on port 8000
+- [x] FastAPI backend — all 20 endpoints working on port 8000
 - [x] MySQL → Supabase auto sync every 60 seconds
 - [x] Supabase RLS security enabled on all 4 tables
 - [x] Next.js 16 dashboard — 7 pages complete
@@ -35,30 +33,39 @@
   - [x] Security Monitor — Triple Layer Security with live camera
   - [x] Automation — relay controls, rule management
   - [x] Reports — historical charts, CSV export
-- [x] Telegram bot — all alert types working including security alerts
+- [x] Telegram bot — all alert types including security alerts with photo
 - [x] AI Model v1 — YOLOv8n (mAP50 59.1% standardised)
 - [x] AI Model v2 — YOLOv8s comparison (mAP50 52.3% standardised)
 - [x] AI Model v3 — YOLOv8n FINAL (mAP50 71.5% standardised) ✅
 - [x] All 3 models evaluated on same test set
 - [x] Evaluation charts + confusion matrix generated
 - [x] V3 ONNX exported (best_v3.onnx)
-- [x] Triple Layer Security System ← NEW
+- [x] Triple Layer Security System ✅
   - [x] Layer 1 — PIR sensor / software motion detection
   - [x] Layer 2 — Camera snapshot capture
   - [x] Layer 3 — YOLOv8n COCO AI threat classification
-  - [x] Telegram alerts with photo
+  - [x] Telegram alerts with photo + 30s cooldown
   - [x] Security event log in dashboard
-  - [x] 30 second cooldown anti-spam
 - [x] Git LFS for model weights
 - [x] 3x backups — GitHub, D drive, Google Drive
 - [x] Cloudflared installed
 - [x] IRIV hardware scripts — all 5 complete + tested in simulation
+- [x] PSM2 FYP Report — ALL 6 CHAPTERS COMPLETE ✅
+  - [x] Chapter 1 — Introduction
+  - [x] Chapter 2 — Literature Review
+  - [x] Chapter 3 — Methodology
+  - [x] Chapter 4 — Requirement Analysis & Design
+  - [x] Chapter 5 — Implementation & Testing
+  - [ ] Chapter 6 — Conclusion
+  - [x] All diagrams — Use Case, Sequence, Activity, Architecture, Class, ERD
 
 ### 🔲 Todo
+- [x] Abstract, TOC, List of Figures, List of Tables, References
+- [x] MySQL + Supabase screenshots for Section 4.4
 - [ ] Annotate Kaggle images in Label Studio → retrain v4
 - [ ] Cloudflared tunnel test — need home WiFi
 - [ ] IRIV hardware arrives → deploy + test
-- [ ] FYP report writing (PSM2)
+- [ ] Full end-to-end field test
 
 ---
 
@@ -102,7 +109,7 @@ fyp-oil-palm/
 │   │   ├── best.pt                ← YOLOv8n v1 (disease detection)
 │   │   ├── best.onnx              ← YOLOv8n v1 ONNX
 │   │   ├── best_v2_yolov8s.pt     ← YOLOv8s comparison
-│   │   ├── best_v3.pt             ← YOLOv8n v3 FINAL ✅
+│   │   ├── best_v3.pt             ← YOLOv8n v3 FINAL ✅ PRODUCTION
 │   │   └── best_v3.onnx           ← YOLOv8n v3 ONNX for IRIV ✅
 │   ├── runs/
 │   │   ├── oil_palm_v1/           ← YOLOv8n v1 training results
@@ -123,9 +130,8 @@ fyp-oil-palm/
 │   │   ├── disease.py             ✅ includes /detect endpoint
 │   │   ├── alerts.py              ✅
 │   │   ├── automation.py          ✅
-│   │   └── security.py            ✅ NEW — Triple Layer Security
-│   ├── schemas/
-│   │   └── schemas.py             ✅
+│   │   └── security.py            ✅ Triple Layer Security
+│   ├── schemas/schemas.py         ✅
 │   └── database/
 │       ├── connection.py          ✅
 │       ├── init.sql               ✅
@@ -133,15 +139,15 @@ fyp-oil-palm/
 │
 ├── dashboard/                     ← Next.js 16 (port 3000)
 │   ├── app/
-│   │   ├── page.tsx               ✅ Overview (offline/online indicator)
+│   │   ├── page.tsx               ✅ Overview
 │   │   ├── sensors/page.tsx       ✅
 │   │   ├── disease/page.tsx       ✅
 │   │   ├── disease/detect/page.tsx ✅ Upload + webcam + live detection
-│   │   ├── security/page.tsx      ✅ NEW — Triple Layer Security Monitor
+│   │   ├── security/page.tsx      ✅ Triple Layer Security Monitor
 │   │   ├── automation/page.tsx    ✅
 │   │   └── reports/page.tsx       ✅
 │   └── components/ui/
-│       ├── Sidebar.tsx            ✅ 7 nav items including Security
+│       ├── Sidebar.tsx            ✅ 7 nav items
 │       ├── SensorCard.tsx         ✅
 │       ├── Skeleton.tsx           ✅
 │       ├── LiveIndicator.tsx      ✅
@@ -153,7 +159,7 @@ fyp-oil-palm/
 │   ├── inference_runner.py        ✅ ONNX inference + simulation
 │   ├── telegram_bot.py            ✅ All alert types + security alerts
 │   ├── automation_controller.py   ✅ Relay control + simulation
-│   └── security_monitor.py        ✅ NEW — Triple Layer Security script
+│   └── security_monitor.py        ✅ Triple Layer Security script
 │
 └── docs/
     └── architecture_diagram.html  ✅
@@ -184,7 +190,7 @@ fyp-oil-palm/
 
 ---
 
-## 🛡️ Triple Layer Security System — NEW
+## 🛡️ Triple Layer Security System
 
 ### How It Works
 ```
@@ -194,15 +200,7 @@ Layer 3 → YOLOv8n COCO model       → AI classifies person/animal/clear
     ↓
 Person detected  → HIGH ALERT   → DB log + Telegram photo alert
 Animal detected  → MEDIUM ALERT → DB log + Telegram photo alert
-False alarm      → LOG ONLY     → No notification (saves battery/bandwidth)
-```
-
-### Threat Levels
-```
-HIGH   → Person detected  → 🚨 Immediate Telegram alert with photo
-MEDIUM → Animal detected  → ⚠️ Telegram alert with photo
-LOW    → Unknown          → Logged only
-NONE   → Area clear       → No action
+False alarm      → LOG ONLY     → No notification
 ```
 
 ### Key Features
@@ -212,16 +210,8 @@ NONE   → Area clear       → No action
 ✅ 30 second cooldown — prevents alert spam
 ✅ Saves snapshots to captured_images/security/
 ✅ Security event log in dashboard
+✅ Camera selector — supports OBS Virtual Camera
 ✅ Works in simulation on Windows
-✅ Uses pretrained YOLOv8n COCO — no training needed
-```
-
-### Security API Endpoints
-```
-POST /security/detect      ← Upload frame → AI classify → log if threat
-GET  /security/events      ← Get recent security events
-GET  /security/events/count ← Get threat counts by type
-POST /security/test-alert  ← Insert test event + send Telegram
 ```
 
 ### Camera Indices (Windows Dev)
@@ -254,21 +244,20 @@ fruit_bunch_rot. Merged into 'unhealthy'. 'immature' added to prevent false posi
 3: immature   → Young/immature palm tree                     (severity: Low)
 ```
 
-### 3-Model Comparison (Standardised Test Set)
+### 3-Model Comparison (Standardised Test Set — 670 images)
 | Model | Architecture | Datasets | Images | mAP50 | Status |
 |---|---|---|---|---|---|
 | V1 | YOLOv8n | 3 | 5,725 | 59.1% | Baseline |
 | V2 | YOLOv8s | 3 | 5,725 | 52.3% | Architecture test |
 | V3 | YOLOv8n | 10 | 7,748 | **71.5%** | ✅ PRODUCTION |
 
-### V3 Per-Class Results
+### Key Findings (For Report)
 ```
-Class        Precision  Recall   mAP50   mAP50-95
-healthy      0.979      0.891    0.944   0.908
-ganoderma    0.812      0.143    0.478   0.328
-unhealthy    0.978      0.993    0.994   0.952
-immature     0.542      0.617    0.444   0.411
-Overall      0.828      0.661    0.715   0.650
+1. Dataset diversity > Architecture complexity
+   V2 (YOLOv8s bigger) scored LOWER than V1 (YOLOv8n)
+2. More diverse data = best improvement
+   V3 same arch as V1 but 10 datasets → +12.4% mAP50
+3. V3 is production model — 71.5% mAP50
 ```
 
 ### Inference
@@ -304,7 +293,7 @@ DB_NAME=fyp_oil_palm
 MySQL path: C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe
 ```
 
-**All endpoints:**
+**All 20 endpoints:**
 ```
 GET  /sensors/latest
 GET  /sensors/history?hours=24
@@ -341,12 +330,12 @@ alerts:             id, alert_type, message, sensor_value, threshold, acknowledg
 automation_rules:   id, rule_name, trigger_type, sensor_field, threshold_value, operator, relay_pin, is_active, last_triggered, created_at
 ```
 
-**Alert types used:**
+**Alert types:**
 ```
-sensor alerts:   soil_moisture, temperature, ec_level, humidity
-disease alerts:  disease_detected
-relay alerts:    relay_activated, relay_deactivated
-security alerts: security_person, security_animal, security_unknown
+sensor:   soil_moisture, temperature, ec_level, humidity
+disease:  disease_detected
+relay:    relay_activated, relay_deactivated
+security: security_person, security_animal, security_unknown
 ```
 
 **Default automation rules:**
@@ -372,7 +361,7 @@ Fertilizer Pump  → ec_level < 1.2      → Relay 3
 /sensors         → Real-time charts, safe zones, time range selector
 /disease         → Detection history, confidence bars, disease info
 /disease/detect  → Upload image OR webcam → YOLOv8 disease inference
-/security        → Triple Layer Security — live camera + event log ← NEW
+/security        → Triple Layer Security — live camera + event log
 /automation      → Relay controls, rule management
 /reports         → Historical charts, CSV export
 ```
@@ -383,16 +372,16 @@ Fertilizer Pump  → ec_level < 1.2      → Relay 3
 
 **All alert types:**
 ```
-alert_soil_moisture(value)                          → 🚨 Soil moisture low
-alert_temperature(value)                            → 🌡️ Temperature high
-alert_humidity(value)                               → 💨 Humidity low
-alert_ec_level(value)                               → ⚡ EC level low
-alert_disease_detected(label, conf, severity, ...)  → 🔬 Disease + photo
-notify_relay_activated(name, pin, reason)           → ⚙️ Relay ON
-notify_relay_deactivated(name, pin)                 → ⚙️ Relay OFF
-send_daily_summary(...)                             → 📊 Daily report
-send_system_startup()                               → 🚀 System online
-send_security_telegram(type, conf, detections, img) → 🚨 Security + photo ← NEW
+alert_soil_moisture(value)
+alert_temperature(value)
+alert_humidity(value)
+alert_ec_level(value)
+alert_disease_detected(label, conf, severity, tree_id, block_id, image_path)
+notify_relay_activated(name, pin, reason)
+notify_relay_deactivated(name, pin)
+send_daily_summary(avg_temp, avg_hum, avg_soil, avg_ec, disease_count, alert_count)
+send_system_startup()
+send_security_telegram(threat_type, confidence, detections, snapshot_path)
 ```
 
 **Test:** `python iriv_scripts/telegram_bot.py`
@@ -416,6 +405,7 @@ send_security_telegram(type, conf, detections, img) → 🚨 Security + photo �
 Status:  Installed ✅
 Path:    C:\Program Files (x86)\cloudflared\cloudflared.exe
 Test:    cloudflared tunnel --url http://localhost:8000
+Note:    Blocked on university WiFi — test on home WiFi
 ```
 
 ---
@@ -455,6 +445,32 @@ git config --global http.sslVerify true
 
 ---
 
+## 📝 PSM2 Report Status
+
+```
+✅ Chapter 1 — Introduction
+✅ Chapter 2 — Literature Review
+✅ Chapter 3 — System Development Methodology
+✅ Chapter 4 — Requirement Analysis and Design
+✅ Chapter 5 — Implementation and Testing
+✅ Chapter 6 — Conclusion
+✅ Use Case Diagram (4.2.3)
+✅ Sequence Diagram (4.2.4) — Triple Layer Security pipeline
+✅ Activity Diagram (4.2.5) — Disease detection pipeline
+✅ System Architecture (4.3.1) — 4-layer diagram
+✅ Class Diagram (4.3.2) — 7 classes
+✅ ERD (4.4) — 4 tables with relationships
+
+✅ Abstract
+✅ Table of Contents
+✅ List of Figures
+✅ List of Tables
+✅ References / Bibliography
+✅ MySQL + Supabase screenshots for Section 4.4
+```
+
+---
+
 ## 🚀 IRIV Deployment Checklist
 
 ```
@@ -475,7 +491,7 @@ git config --global http.sslVerify true
     python iriv_scripts/automation_controller.py
     python iriv_scripts/security_monitor.py
 11. Set up systemd for auto-start
-12. Test full end-to-end
+12. Full end-to-end test
 ```
 
 ---
@@ -509,6 +525,8 @@ git config --global http.sslVerify true
 25. Security cooldown is 30 seconds between alerts
 26. PIR sensor GPIO pin is 24 on IRIV
 27. OBS Virtual Camera is Camera index 1 on dev laptop
-28. Dashboard has 7 pages — added Security Monitor page
-29. security_monitor.py in iriv_scripts — full Triple Layer Security
-30. evaluate.py evaluates all 3 models on same test set
+28. Dashboard has 7 pages — Security Monitor added
+29. security_monitor.py implements Triple Layer Security
+30. evaluate.py evaluates all 3 models on same standardised test set
+31. PSM2 report all 6 chapters complete — stored in project docs
+32. npm run dev error was caused by VS Code extension — fixed by deleting extension
