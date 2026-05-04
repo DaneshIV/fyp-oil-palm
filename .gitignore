@@ -3,6 +3,7 @@ fyp_env/
 
 # Datasets — too large for GitHub
 ai_model/datasets/
+captured_images/
 
 # Trained model weights — too large
 ai_model/models/*.pt
