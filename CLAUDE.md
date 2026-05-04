@@ -7,7 +7,7 @@
 
 ## 🌴 Project Overview
 
-**Project Title:** AN INTEGRATED IOT BASED SMART MONITORING,AUTOMATION & SECURITY SYSTEM FOR OIL PALM TREE
+**Project Title:** AN INTEGRATED IOT BASED SMART MONITORING, AUTOMATION & SECURITY SYSTEM FOR OIL PALM TREE
 **Developer:** Danesh Muthu Krisnan
 **Type:** Final Year Project (FYP)
 **Hardware:** IRIV PiControl Industry 4.0 AgriBox v2 (Raspberry Pi CM4-based industrial controller by Cytron Malaysia)
@@ -48,7 +48,11 @@
   - [x] Security event log in dashboard
 - [x] Git LFS for model weights
 - [x] 3x backups — GitHub, D drive, Google Drive
-- [x] Cloudflared installed
+- [x] Cloudflared tunnel — FULLY WORKING ✅
+  - [x] Named tunnel: fyp-oil-palm
+  - [x] Dashboard: https://app.project2030.me
+  - [x] API: https://api.project2030.me
+  - [x] Domain: project2030.me (Namecheap → Cloudflare)
 - [x] IRIV hardware scripts — all 5 complete + tested in simulation
 - [x] PSM2 FYP Report — ALL 6 CHAPTERS COMPLETE ✅
   - [x] Chapter 1 — Introduction
@@ -56,14 +60,13 @@
   - [x] Chapter 3 — Methodology
   - [x] Chapter 4 — Requirement Analysis & Design
   - [x] Chapter 5 — Implementation & Testing
-  - [ ] Chapter 6 — Conclusion
+  - [x] Chapter 6 — Conclusion
   - [x] All diagrams — Use Case, Sequence, Activity, Architecture, Class, ERD
+  - [x] Abstract, TOC, List of Figures, List of Tables, References
+  - [x] MySQL + Supabase screenshots for Section 4.4
 
 ### 🔲 Todo
-- [x] Abstract, TOC, List of Figures, List of Tables, References
-- [x] MySQL + Supabase screenshots for Section 4.4
 - [ ] Annotate Kaggle images in Label Studio → retrain v4
-- [ ] Cloudflared tunnel test — need home WiFi
 - [ ] IRIV hardware arrives → deploy + test
 - [ ] Full end-to-end field test
 
@@ -78,7 +81,7 @@ fyp-oil-palm/
 ├── pyrightconfig.json             ← Suppress Pylance RPi/hardware warnings
 ├── .gitignore
 ├── .env                           ← Never commit!
-├── start_fyp.ps1                  ← Start all services
+├── start_fyp.ps1                  ← Start all services + Cloudflared
 ├── demo_data.py                   ← Insert demo sensor data
 ├── live_sensors.py                ← Continuous live sensor updates
 ├── add_alerts.py                  ← Insert demo alerts
@@ -190,6 +193,41 @@ fyp-oil-palm/
 
 ---
 
+## 🌐 Cloudflared Tunnel — LIVE ✅
+
+| Detail | Value |
+|---|---|
+| Tunnel Name | fyp-oil-palm |
+| Tunnel ID | 26d38b6a-5222-40a0-a0a4-489fcbbfd610 |
+| Dashboard URL | https://app.project2030.me |
+| API URL | https://api.project2030.me |
+| Domain | project2030.me (Namecheap → Cloudflare) |
+| Config | C:\Users\danes\.cloudflared\config.yml |
+| Credentials | C:\Users\danes\.cloudflared\26d38b6a-5222-40a0-a0a4-489fcbbfd610.json |
+
+**Config file** (`C:\Users\danes\.cloudflared\config.yml`):
+```yaml
+tunnel: 26d38b6a-5222-40a0-a0a4-489fcbbfd610
+credentials-file: C:\Users\danes\.cloudflared\26d38b6a-5222-40a0-a0a4-489fcbbfd610.json
+
+ingress:
+  - hostname: api.project2030.me
+    service: http://localhost:8000
+  - hostname: app.project2030.me
+    service: http://localhost:3000
+  - service: http_status:404
+```
+
+**Run tunnel:**
+```powershell
+cloudflared tunnel run fyp-oil-palm
+```
+
+**Note:** Use `npm run build && npm start` for production dashboard (not `npm run dev`)
+because dev mode WebSockets conflict with Cloudflared.
+
+---
+
 ## 🛡️ Triple Layer Security System
 
 ### How It Works
@@ -278,8 +316,9 @@ results = model('frame.jpg', conf=0.25)
 
 | Detail | Value |
 |---|---|
-| Port | 8000 |
-| Docs | http://localhost:8000/docs |
+| Port (local) | 8000 |
+| URL (remote) | https://api.project2030.me |
+| Docs | https://api.project2030.me/docs |
 | Database | MySQL 8.0 — fyp_oil_palm |
 | Cloud Sync | Supabase every 60s |
 
@@ -293,7 +332,7 @@ DB_NAME=fyp_oil_palm
 MySQL path: C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe
 ```
 
-**All 20 endpoints:**
+**All endpoints:**
 ```
 GET  /sensors/latest
 GET  /sensors/history?hours=24
@@ -351,8 +390,10 @@ Fertilizer Pump  → ec_level < 1.2      → Relay 3
 
 | Detail | Value |
 |---|---|
-| Port | 3000 |
-| Run | npm run dev (inside dashboard folder) |
+| Port (local) | 3000 |
+| URL (remote) | https://app.project2030.me |
+| Dev mode | npm run dev (inside dashboard folder) |
+| Production | npm run build then npm start |
 | Pages | 7 pages total |
 
 **All pages:**
@@ -364,6 +405,11 @@ Fertilizer Pump  → ec_level < 1.2      → Relay 3
 /security        → Triple Layer Security — live camera + event log
 /automation      → Relay controls, rule management
 /reports         → Historical charts, CSV export
+```
+
+**dashboard/.env.local for production tunnel:**
+```
+NEXT_PUBLIC_API_URL=https://api.project2030.me
 ```
 
 ---
@@ -399,17 +445,6 @@ send_security_telegram(threat_type, confidence, detections, snapshot_path)
 
 ---
 
-## 🔐 Cloudflared
-
-```
-Status:  Installed ✅
-Path:    C:\Program Files (x86)\cloudflared\cloudflared.exe
-Test:    cloudflared tunnel --url http://localhost:8000
-Note:    Blocked on university WiFi — test on home WiFi
-```
-
----
-
 ## 💾 Backups
 
 | Location | Status | Contents |
@@ -428,8 +463,13 @@ cd C:\Users\danes\fyp-oil-palm
 fyp_env\Scripts\activate
 .\start_fyp.ps1
 
+# Local URLs
 # Dashboard: http://localhost:3000
 # API Docs:  http://localhost:8000/docs
+
+# Remote URLs (via Cloudflared)
+# Dashboard: https://app.project2030.me
+# API:       https://api.project2030.me
 
 # Demo scripts
 python demo_data.py          # Insert escalating sensor data
@@ -445,7 +485,7 @@ git config --global http.sslVerify true
 
 ---
 
-## 📝 PSM2 Report Status
+## 📝 PSM2 Report Status — 100% COMPLETE ✅
 
 ```
 ✅ Chapter 1 — Introduction
@@ -460,7 +500,6 @@ git config --global http.sslVerify true
 ✅ System Architecture (4.3.1) — 4-layer diagram
 ✅ Class Diagram (4.3.2) — 7 classes
 ✅ ERD (4.4) — 4 tables with relationships
-
 ✅ Abstract
 ✅ Table of Contents
 ✅ List of Figures
@@ -471,7 +510,7 @@ git config --global http.sslVerify true
 
 ---
 
-## 🚀 IRIV Deployment Checklist
+## 🚀 IRIV Deployment Checklist (When Hardware Arrives)
 
 ```
 1.  Flash Raspberry Pi OS
@@ -484,14 +523,17 @@ git config --global http.sslVerify true
 6.  Copy .env with credentials
 7.  Copy best_v3.onnx → ai_model/models/best.onnx
 8.  Connect PIR sensor to GPIO 24
-9.  Set up Cloudflared tunnel
-10. Start services:
+9.  Install cloudflared on IRIV (Linux)
+10. Copy ~/.cloudflared/ credentials to IRIV
+11. Start services:
     uvicorn backend.main:app --host 0.0.0.0 --port 8000
     python iriv_scripts/sensor_collector.py
     python iriv_scripts/automation_controller.py
     python iriv_scripts/security_monitor.py
-11. Set up systemd for auto-start
-12. Full end-to-end test
+    cloudflared tunnel run fyp-oil-palm
+12. Set up systemd for auto-start
+13. Full end-to-end test
+14. Verify https://app.project2030.me loads from phone
 ```
 
 ---
@@ -528,5 +570,9 @@ git config --global http.sslVerify true
 28. Dashboard has 7 pages — Security Monitor added
 29. security_monitor.py implements Triple Layer Security
 30. evaluate.py evaluates all 3 models on same standardised test set
-31. PSM2 report all 6 chapters complete — stored in project docs
-32. npm run dev error was caused by VS Code extension — fixed by deleting extension
+31. PSM2 report all 6 chapters 100% complete
+32. npm run dev conflicts with Cloudflared — use npm run build + npm start for production
+33. Cloudflared named tunnel: fyp-oil-palm — run with: cloudflared tunnel run fyp-oil-palm
+34. Domain: project2030.me — Dashboard: app.project2030.me — API: api.project2030.me
+35. Tunnel ID: 26d38b6a-5222-40a0-a0a4-489fcbbfd610
+36. dashboard/.env.local NEXT_PUBLIC_API_URL must be https://api.project2030.me for production

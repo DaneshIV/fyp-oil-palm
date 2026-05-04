@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from backend.routes import sensors, disease, alerts, automation
+from backend.routes import sensors, disease, alerts, automation, security, auth 
 from backend.database.connection import get_db
 from backend.database.supabase_sync import run_full_sync
 from sqlalchemy.orm import Session
@@ -19,7 +19,8 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[""
+    "http://localhost:3000", "https://app.project2030.me"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,6 +31,7 @@ app.include_router(disease.router)
 app.include_router(alerts.router)
 app.include_router(automation.router)
 app.include_router(security.router)
+app.include_router(auth.router)
 
 @app.get("/")
 def root():
@@ -41,7 +43,13 @@ def root():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy"}
+    return {
+        "project": "FYP Oil Palm IoT System",
+        "status": "healthy",
+        "version": "1.0.0",
+        "docs": "/docs",
+        "dashboard": "https://app.project2030.me"
+    }
 
 @app.post("/sync")
 def manual_sync(db: Session = Depends(get_db)):

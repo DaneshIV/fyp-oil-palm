@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Upload, Camera, Microscope, RefreshCw, CheckCircle, AlertTriangle, Radio } from 'lucide-react'
-
+import {useRouter} from 'next/navigation'
 interface Detection {
   class_name: string
   confidence: number
