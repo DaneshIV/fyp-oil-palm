@@ -1,4 +1,5 @@
 import axios from 'axios'
+import Cookies from 'js-cookie'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -7,7 +8,30 @@ export const api = axios.create({
   timeout: 10000,
 })
 
-// ── Sensor API ──────────────────────────
+// ── JWT Interceptors ─────────────────────
+// Add token to every request
+api.interceptors.request.use((config) => {
+  const token = Cookies.get('auth_token')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
+// Handle 401 — redirect to login
+api.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response?.status === 401) {
+      Cookies.remove('auth_token')
+      Cookies.remove('username')
+      window.location.href = '/login'
+    }
+    return Promise.reject(error)
+  }
+)
+
+// ── Sensor API ───────────────────────────
 export const sensorApi = {
   getLatest: () => api.get('/sensors/latest'),
   getHistory: (hours = 24) => api.get(`/sensors/history?hours=${hours}`),

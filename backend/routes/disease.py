@@ -8,7 +8,10 @@ from datetime import datetime
 import shutil
 from pathlib import Path
 
-router = APIRouter(prefix="/disease", tags=["Disease"])
+router = APIRouter(
+    prefix="/disease",
+    tags=["Disease"],
+)
 
 UPLOAD_DIR = Path("captured_images")
 UPLOAD_DIR.mkdir(exist_ok=True)

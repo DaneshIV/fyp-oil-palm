@@ -20,6 +20,7 @@ const navItems = [
   { href: '/disease',        label: 'Disease AI', icon: Microscope },
   { href: '/disease/detect', label: 'AI Test',    icon: Camera },
   { href: '/security',       label: 'Security',   icon: Shield },
+  { href: '/security/snapshots', label: 'Snapshots', icon: Camera },
   { href: '/automation',     label: 'Automation', icon: Settings },
   { href: '/reports',        label: 'Reports',    icon: BarChart3 },
 ]

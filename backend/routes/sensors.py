@@ -6,7 +6,10 @@ from backend.schemas.schemas import SensorReading, SensorReadingCreate
 from typing import List
 from datetime import datetime, timedelta
 
-router = APIRouter(prefix="/sensors", tags=["Sensors"])
+router = APIRouter(
+    prefix="/sensors",
+    tags=["Sensors"],
+)
 
 @router.get("/latest", response_model=SensorReading)
 def get_latest_sensor(db: Session = Depends(get_db)):

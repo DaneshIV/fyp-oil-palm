@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, UploadFile, File
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from backend.database.connection import get_db
@@ -7,7 +8,11 @@ from pathlib import Path
 import asyncio
 import os
 
-router = APIRouter(prefix="/security", tags=["Security"])
+router = APIRouter(
+    prefix="/security",
+    tags=["Security"],
+)
+
 
 SNAPSHOT_DIR = Path("captured_images/security")
 SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
@@ -249,3 +254,28 @@ async def test_security_alert(db: Session = Depends(get_db)):
         print(f"Test Telegram failed: {e}")
 
     return {"success": True, "message": "Test security alert inserted"}
+# ── Security Events Snapshots──────────────────────────────────────────
+@router.get("/snapshots")
+def get_snapshots():
+    """List all security snapshots"""
+    if not SNAPSHOT_DIR.exists():
+        return []
+    
+    files = []
+    for f in sorted(SNAPSHOT_DIR.glob("*.jpg"), 
+                   key=os.path.getmtime, reverse=True)[:50]:
+        files.append({
+            "filename": f.name,
+            "created":  datetime.fromtimestamp(f.stat().st_mtime).isoformat(),
+            "size":     f.stat().st_size,
+            "url":      f"/security/snapshot/{f.name}"
+        })
+    return files
+
+@router.get("/snapshot/{filename}")
+def get_snapshot(filename: str):
+    """Serve a single snapshot image"""
+    filepath = SNAPSHOT_DIR / filename
+    if not filepath.exists():
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    return FileResponse(str(filepath), media_type="image/jpeg")

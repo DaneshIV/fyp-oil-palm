@@ -5,7 +5,10 @@ from backend.database.connection import get_db
 from backend.schemas.schemas import Alert, AlertCreate
 from typing import List
 
-router = APIRouter(prefix="/alerts", tags=["Alerts"])
+router = APIRouter(
+    prefix="/alerts",
+    tags=["Alerts"],
+)
 
 @router.get("/", response_model=List[Alert])
 def get_alerts(

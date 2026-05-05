@@ -7,7 +7,10 @@ from typing import List
 from pydantic import BaseModel
 from datetime import datetime
 
-router = APIRouter(prefix="/automation", tags=["Automation"])
+router = APIRouter(
+    prefix="/automation",
+    tags=["Automation"],
+)
 
 class RelayControl(BaseModel):
     relay_pin: int

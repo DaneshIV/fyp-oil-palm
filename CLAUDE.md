@@ -25,15 +25,22 @@
 - [x] FastAPI backend — all 20 endpoints working on port 8000
 - [x] MySQL → Supabase auto sync every 60 seconds
 - [x] Supabase RLS security enabled on all 4 tables
-- [x] Next.js 16 dashboard — 7 pages complete
+- [x] Next.js 16 dashboard — 8 pages complete
   - [x] Overview — live sensors, alerts, disease feed, offline indicator
   - [x] Sensors — real-time charts, safe zones, time range selector
   - [x] Disease AI — detection history, confidence bars, disease info
   - [x] AI Test — upload image OR webcam → YOLOv8 inference live
   - [x] Security Monitor — Triple Layer Security with live camera
+  - [x] Security Snapshots — gallery grid + lightbox + download ✅
   - [x] Automation — relay controls, rule management
   - [x] Reports — historical charts, CSV export
 - [x] Telegram bot — all alert types including security alerts with photo
+- [x] Daily Telegram summary at midnight ✅ (iriv_scripts/daily_summary.py)
+- [x] JWT Authentication ✅
+  - [x] Login page at /login
+  - [x] proxy.ts middleware — protects all routes
+  - [x] Cookies: auth_token (24h) + username
+  - [x] Logout button in sidebar with username display
 - [x] AI Model v1 — YOLOv8n (mAP50 59.1% standardised)
 - [x] AI Model v2 — YOLOv8s comparison (mAP50 52.3% standardised)
 - [x] AI Model v3 — YOLOv8n FINAL (mAP50 71.5% standardised) ✅
@@ -46,6 +53,7 @@
   - [x] Layer 3 — YOLOv8n COCO AI threat classification
   - [x] Telegram alerts with photo + 30s cooldown
   - [x] Security event log in dashboard
+  - [x] Security snapshots gallery page ✅
 - [x] Git LFS for model weights
 - [x] 3x backups — GitHub, D drive, Google Drive
 - [x] Cloudflared tunnel — FULLY WORKING ✅
@@ -53,7 +61,7 @@
   - [x] Dashboard: https://app.project2030.me
   - [x] API: https://api.project2030.me
   - [x] Domain: project2030.me (Namecheap → Cloudflare)
-- [x] IRIV hardware scripts — all 5 complete + tested in simulation
+- [x] IRIV hardware scripts — all 6 complete + tested in simulation
 - [x] PSM2 FYP Report — ALL 6 CHAPTERS COMPLETE ✅
   - [x] Chapter 1 — Introduction
   - [x] Chapter 2 — Literature Review
@@ -66,6 +74,8 @@
   - [x] MySQL + Supabase screenshots for Section 4.4
 
 ### 🔲 Todo
+- [ ] API endpoint JWT protection (Priority 2)
+- [ ] Progressive Web App PWA (Priority 3)
 - [ ] Annotate Kaggle images in Label Studio → retrain v4
 - [ ] IRIV hardware arrives → deploy + test
 - [ ] Full end-to-end field test
@@ -79,7 +89,7 @@ fyp-oil-palm/
 ├── CLAUDE.md
 ├── README.md
 ├── pyrightconfig.json             ← Suppress Pylance RPi/hardware warnings
-├── .gitignore
+├── .gitignore                     ← captured_images/ excluded
 ├── .env                           ← Never commit!
 ├── start_fyp.ps1                  ← Start all services + Cloudflared
 ├── demo_data.py                   ← Insert demo sensor data
@@ -133,7 +143,8 @@ fyp-oil-palm/
 │   │   ├── disease.py             ✅ includes /detect endpoint
 │   │   ├── alerts.py              ✅
 │   │   ├── automation.py          ✅
-│   │   └── security.py            ✅ Triple Layer Security
+│   │   ├── security.py            ✅ Triple Layer Security + snapshots
+│   │   └── auth.py                ✅ JWT login/verify/logout
 │   ├── schemas/schemas.py         ✅
 │   └── database/
 │       ├── connection.py          ✅
@@ -141,16 +152,21 @@ fyp-oil-palm/
 │       └── supabase_sync.py       ✅
 │
 ├── dashboard/                     ← Next.js 16 (port 3000)
+│   ├── proxy.ts                   ← Route protection middleware
+│   ├── next.config.ts             ← outputFileTracingRoot set
+│   ├── .env.local                 ← NEXT_PUBLIC_API_URL
 │   ├── app/
+│   │   ├── login/page.tsx         ✅ JWT login page
 │   │   ├── page.tsx               ✅ Overview
 │   │   ├── sensors/page.tsx       ✅
 │   │   ├── disease/page.tsx       ✅
 │   │   ├── disease/detect/page.tsx ✅ Upload + webcam + live detection
 │   │   ├── security/page.tsx      ✅ Triple Layer Security Monitor
+│   │   ├── security/snapshots/page.tsx ✅ Snapshots gallery
 │   │   ├── automation/page.tsx    ✅
 │   │   └── reports/page.tsx       ✅
 │   └── components/ui/
-│       ├── Sidebar.tsx            ✅ 7 nav items
+│       ├── Sidebar.tsx            ✅ 8 nav items + logout button
 │       ├── SensorCard.tsx         ✅
 │       ├── Skeleton.tsx           ✅
 │       ├── LiveIndicator.tsx      ✅
@@ -162,7 +178,8 @@ fyp-oil-palm/
 │   ├── inference_runner.py        ✅ ONNX inference + simulation
 │   ├── telegram_bot.py            ✅ All alert types + security alerts
 │   ├── automation_controller.py   ✅ Relay control + simulation
-│   └── security_monitor.py        ✅ Triple Layer Security script
+│   ├── security_monitor.py        ✅ Triple Layer Security script
+│   └── daily_summary.py           ✅ Midnight Telegram summary
 │
 └── docs/
     └── architecture_diagram.html  ✅
@@ -218,13 +235,36 @@ ingress:
   - service: http_status:404
 ```
 
-**Run tunnel:**
-```powershell
-cloudflared tunnel run fyp-oil-palm
+**Run tunnel:** `cloudflared tunnel run fyp-oil-palm`
+**Note:** Use `npm run build && npm start` NOT `npm run dev` with Cloudflared
+
+---
+
+## 🔐 JWT Authentication
+
+```
+Login page:     /login
+Credentials:    admin/fyp2024  OR  danesh/oilpalm2024
+Token storage:  Cookie (auth_token, 24h expiry)
+Middleware:     dashboard/proxy.ts — export function proxy()
+Logout:         Sidebar logout button clears cookies → redirects /login
+Fix:            window.location.href = '/' after login (NOT router.push)
+Backend:        backend/routes/auth.py
+Endpoints:      POST /auth/login, GET /auth/verify, POST /auth/logout
 ```
 
-**Note:** Use `npm run build && npm start` for production dashboard (not `npm run dev`)
-because dev mode WebSockets conflict with Cloudflared.
+---
+
+## 📅 Daily Telegram Summary
+
+```
+Script:   iriv_scripts/daily_summary.py
+Schedule: Every day at midnight (00:00)
+Test:     python iriv_scripts/daily_summary.py --now
+Contents: Sensor averages, disease counts, alerts, relay activations
+Status:   ALL GOOD / MONITOR CLOSELY / NEEDS ATTENTION
+Library:  pip install schedule
+```
 
 ---
 
@@ -246,8 +286,9 @@ False alarm      → LOG ONLY     → No notification
 ✅ Eliminates false alarms from wind/shadows
 ✅ Telegram photo alert with bounding box overlay
 ✅ 30 second cooldown — prevents alert spam
-✅ Saves snapshots to captured_images/security/
+✅ Saves snapshots to captured_images/security/ (gitignored)
 ✅ Security event log in dashboard
+✅ Security snapshots gallery at /security/snapshots
 ✅ Camera selector — supports OBS Virtual Camera
 ✅ Works in simulation on Windows
 ```
@@ -340,7 +381,7 @@ POST /sensors/
 GET  /disease/history?limit=20
 GET  /disease/latest
 POST /disease/
-POST /disease/detect          ← image upload + YOLOv8 disease inference
+POST /disease/detect              ← image upload + YOLOv8 disease inference
 GET  /alerts/
 GET  /alerts/count
 POST /alerts/{id}/acknowledge
@@ -350,10 +391,15 @@ POST /automation/rules
 PATCH /automation/rules/{id}/toggle
 DELETE /automation/rules/{id}
 POST /automation/relay
-POST /security/detect         ← frame + YOLOv8n COCO security inference
+POST /security/detect             ← frame + YOLOv8n COCO security inference
 GET  /security/events
 GET  /security/events/count
+GET  /security/snapshots          ← list snapshot files
+GET  /security/snapshot/{filename} ← serve snapshot image
 POST /security/test-alert
+POST /auth/login                  ← JWT login
+GET  /auth/verify                 ← verify token
+POST /auth/logout
 POST /sync
 GET  /health
 ```
@@ -394,20 +440,22 @@ Fertilizer Pump  → ec_level < 1.2      → Relay 3
 | URL (remote) | https://app.project2030.me |
 | Dev mode | npm run dev (inside dashboard folder) |
 | Production | npm run build then npm start |
-| Pages | 7 pages total |
+| Pages | 8 pages total |
 
 **All pages:**
 ```
-/                → Overview — live sensors, alerts, disease feed, offline indicator
-/sensors         → Real-time charts, safe zones, time range selector
-/disease         → Detection history, confidence bars, disease info
-/disease/detect  → Upload image OR webcam → YOLOv8 disease inference
-/security        → Triple Layer Security — live camera + event log
-/automation      → Relay controls, rule management
-/reports         → Historical charts, CSV export
+/login               → JWT login page
+/                    → Overview — live sensors, alerts, disease feed
+/sensors             → Real-time charts, safe zones, time range selector
+/disease             → Detection history, confidence bars, disease info
+/disease/detect      → Upload image OR webcam → YOLOv8 disease inference
+/security            → Triple Layer Security — live camera + event log
+/security/snapshots  → Security snapshots gallery + lightbox + download
+/automation          → Relay controls, rule management
+/reports             → Historical charts, CSV export
 ```
 
-**dashboard/.env.local for production tunnel:**
+**dashboard/.env.local:**
 ```
 NEXT_PUBLIC_API_URL=https://api.project2030.me
 ```
@@ -431,6 +479,7 @@ send_security_telegram(threat_type, confidence, detections, snapshot_path)
 ```
 
 **Test:** `python iriv_scripts/telegram_bot.py`
+**Daily:** `python iriv_scripts/daily_summary.py --now`
 
 ---
 
@@ -517,7 +566,7 @@ git config --global http.sslVerify true
 2.  Configure WiFi
 3.  pip install fastapi uvicorn sqlalchemy pymysql pymodbus
         adafruit-ads1x15 python-telegram-bot opencv-python
-        onnxruntime python-dotenv ultralytics
+        onnxruntime python-dotenv ultralytics schedule
 4.  Copy project files via SCP
 5.  Set up MySQL + run init.sql
 6.  Copy .env with credentials
@@ -527,9 +576,11 @@ git config --global http.sslVerify true
 10. Copy ~/.cloudflared/ credentials to IRIV
 11. Start services:
     uvicorn backend.main:app --host 0.0.0.0 --port 8000
+    cd dashboard && npm run build && npm start
     python iriv_scripts/sensor_collector.py
     python iriv_scripts/automation_controller.py
     python iriv_scripts/security_monitor.py
+    python iriv_scripts/daily_summary.py
     cloudflared tunnel run fyp-oil-palm
 12. Set up systemd for auto-start
 13. Full end-to-end test
@@ -567,7 +618,7 @@ git config --global http.sslVerify true
 25. Security cooldown is 30 seconds between alerts
 26. PIR sensor GPIO pin is 24 on IRIV
 27. OBS Virtual Camera is Camera index 1 on dev laptop
-28. Dashboard has 7 pages — Security Monitor added
+28. Dashboard has 8 pages including login and snapshots gallery
 29. security_monitor.py implements Triple Layer Security
 30. evaluate.py evaluates all 3 models on same standardised test set
 31. PSM2 report all 6 chapters 100% complete
@@ -576,3 +627,9 @@ git config --global http.sslVerify true
 34. Domain: project2030.me — Dashboard: app.project2030.me — API: api.project2030.me
 35. Tunnel ID: 26d38b6a-5222-40a0-a0a4-489fcbbfd610
 36. dashboard/.env.local NEXT_PUBLIC_API_URL must be https://api.project2030.me for production
+37. JWT users: admin/fyp2024, danesh/oilpalm2024
+38. Login fix: window.location.href = '/' not router.push after login
+39. proxy.ts export must be named proxy not middleware
+40. captured_images/ is gitignored — never commit images to GitHub
+41. Daily summary test: python iriv_scripts/daily_summary.py --now
+42. Snapshots served via GET /security/snapshot/{filename} as FileResponse

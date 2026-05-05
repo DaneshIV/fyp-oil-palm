@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from datetime import datetime, timedelta
@@ -7,20 +7,18 @@ import os
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-# ── Config ───────────────────────────────────────────────────
 SECRET_KEY  = os.getenv("JWT_SECRET_KEY", "fyp-oil-palm-secret-key-2024")
 ALGORITHM   = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
-security    = HTTPBearer()
+security          = HTTPBearer()
+security_optional = HTTPBearer(auto_error=False)
 
-# ── Users ────────────────────────────────────────────────────
 USERS = {
     "admin":  {"username": "admin",  "password": "fyp2024",     "role": "admin"},
     "danesh": {"username": "danesh", "password": "oilpalm2024", "role": "admin"}
 }
 
-# ── Schemas (MUST be before endpoints) ──────────────────────
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -31,7 +29,6 @@ class TokenResponse(BaseModel):
     username:     str
     expires_in:   int
 
-# ── Helpers ──────────────────────────────────────────────────
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
     expire    = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -50,13 +47,24 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-# ── Endpoints ────────────────────────────────────────────────
+def verify_token_optional(
+    credentials: HTTPAuthorizationCredentials = Security(security_optional)
+):
+    if credentials is None:
+        return None
+    try:
+        payload  = jwt.decode(
+            credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM]
+        )
+        return payload.get("sub")
+    except JWTError:
+        return None
+
 @router.post("/login", response_model=TokenResponse)
 def login(data: LoginRequest):
     user = USERS.get(data.username)
     if not user or data.password != user["password"]:
         raise HTTPException(status_code=401, detail="Invalid username or password")
-
     token = create_access_token({"sub": data.username, "role": user["role"]})
     return {
         "access_token": token,
