@@ -1,13 +1,26 @@
-import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import type { Metadata, Viewport } from 'next'
+import { Geist } from 'next/font/google'
 import './globals.css'
 import Sidebar from '@/components/ui/Sidebar'
 
 const geist = Geist({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'FYP Oil Palm IoT Dashboard',
-  description: 'IoT Monitoring & Disease Detection System',
+  title:       'Oil Palm IoT System',
+  description: 'Smart monitoring, automation and security for oil palm plantations',
+  manifest:    '/manifest.json',
+  appleWebApp: {
+    capable:        true,
+    statusBarStyle: 'default',
+    title:          'OilPalm IoT',
+  },
+  icons: {
+    apple: '/icons/icon-192x192.png',
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#22c55e',
 }
 
 export default function RootLayout({
