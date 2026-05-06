@@ -1,9 +1,9 @@
 'use client'
-
 import { useEffect, useState } from 'react'
 import { diseaseApi } from '@/lib/api'
-import { RefreshCw, Microscope, AlertTriangle, CheckCircle, Clock } from 'lucide-react'
-import { format, formatDistanceToNow } from 'date-fns'
+import { RefreshCw, Microscope, AlertTriangle, CheckCircle, Clock, TrendingUp } from 'lucide-react'
+import { format, formatDistanceToNow, subDays, startOfDay } from 'date-fns'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
 
 interface DiseaseDetection {
   id: number
@@ -29,6 +29,12 @@ const DISEASE_INFO: Record<string, { description: string; action: string; color:
     color: 'text-orange-400',
     bg: 'bg-orange-500/10 border-orange-500/30',
   },
+  unhealthy: {
+    description: 'General disease symptoms detected including possible Bud Rot or Crown Disease.',
+    action: 'Inspect tree closely. Collect samples for lab analysis. Apply preventive treatment.',
+    color: 'text-yellow-400',
+    bg: 'bg-yellow-500/10 border-yellow-500/30',
+  },
   crown_disease: {
     description: 'Crown Disease causes frond deformity at the canopy level.',
     action: 'Monitor progression. Apply foliar nutrients. Consult agronomist.',
@@ -41,12 +47,28 @@ const DISEASE_INFO: Record<string, { description: string; action: string; color:
     color: 'text-yellow-400',
     bg: 'bg-yellow-500/10 border-yellow-500/30',
   },
+  immature: {
+    description: 'Young or immature palm tree detected. Not yet at productive stage.',
+    action: 'Continue regular care and monitoring. Ensure adequate nutrition and irrigation.',
+    color: 'text-blue-400',
+    bg: 'bg-blue-500/10 border-blue-500/30',
+  },
   healthy: {
     description: 'No disease detected. Tree appears healthy.',
     action: 'Continue regular monitoring and maintenance schedule.',
     color: 'text-green-400',
     bg: 'bg-green-500/10 border-green-500/30',
   },
+}
+
+const LABEL_COLORS: Record<string, string> = {
+  healthy:    '#4ade80',
+  ganoderma:  '#f87171',
+  unhealthy:  '#facc15',
+  immature:   '#60a5fa',
+  bud_rot:    '#fb923c',
+  crown_disease: '#a78bfa',
+  fruit_bunch_rot: '#f472b6',
 }
 
 const getSeverityStyle = (severity: string) => {
@@ -59,7 +81,7 @@ const getSeverityStyle = (severity: string) => {
   }
 }
 
-const ConfidenceBar = ({ confidence, color }: { confidence: number; color: string }) => (
+const ConfidenceBar = ({ confidence }: { confidence: number }) => (
   <div className="w-full bg-gray-800 rounded-full h-2 mt-2">
     <div
       className="h-2 rounded-full transition-all duration-500"
@@ -73,9 +95,9 @@ const ConfidenceBar = ({ confidence, color }: { confidence: number; color: strin
 
 export default function DiseasePage() {
   const [detections, setDetections] = useState<DiseaseDetection[]>([])
-  const [selected, setSelected] = useState<DiseaseDetection | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState('all')
+  const [selected,   setSelected]   = useState<DiseaseDetection | null>(null)
+  const [loading,    setLoading]    = useState(true)
+  const [filter,     setFilter]     = useState('all')
 
   const fetchData = async () => {
     try {
@@ -105,11 +127,34 @@ export default function DiseasePage() {
 
   // Stats
   const totalDetections = detections.length
-  const diseasedCount = detections.filter(d => d.disease_label !== 'healthy').length
-  const healthyCount = detections.filter(d => d.disease_label === 'healthy').length
-  const avgConfidence = detections.length > 0
+  const diseasedCount   = detections.filter(d => d.disease_label !== 'healthy').length
+  const healthyCount    = detections.filter(d => d.disease_label === 'healthy').length
+  const avgConfidence   = detections.length > 0
     ? (detections.reduce((sum, d) => sum + d.confidence, 0) / detections.length).toFixed(1)
     : '0'
+
+  // Chart data — detections per day (last 7 days)
+  const last7Days = Array.from({ length: 7 }, (_, i) => {
+    const day   = startOfDay(subDays(new Date(), 6 - i))
+    const label = format(day, 'dd MMM')
+    const dayDetections = detections.filter(d =>
+      startOfDay(new Date(d.timestamp)).getTime() === day.getTime()
+    )
+    return {
+      date:      label,
+      healthy:   dayDetections.filter(d => d.disease_label === 'healthy').length,
+      diseased:  dayDetections.filter(d => d.disease_label !== 'healthy').length,
+      total:     dayDetections.length,
+    }
+  })
+
+  // Pie chart data — breakdown by class
+  const classBreakdown = Object.entries(
+    detections.reduce((acc, d) => {
+      acc[d.disease_label] = (acc[d.disease_label] || 0) + 1
+      return acc
+    }, {} as Record<string, number>)
+  ).map(([name, value]) => ({ name, value }))
 
   if (loading) {
     return (
@@ -164,6 +209,111 @@ export default function DiseasePage() {
         </div>
       </div>
 
+      {/* Charts Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* Bar chart — detections per day */}
+        <div className="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <h2 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
+            <TrendingUp size={14} className="text-purple-400" />
+            Detection History — Last 7 Days
+          </h2>
+          {detections.length === 0 ? (
+            <div className="h-48 flex items-center justify-center text-gray-600 text-sm">
+              No detection data yet
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={last7Days} margin={{ top: 4, right: 4, bottom: 4, left: -20 }}>
+                <XAxis
+                  dataKey="date"
+                  tick={{ fill: '#6b7280', fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fill: '#6b7280', fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  allowDecimals={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#111827',
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                    color: '#f3f4f6',
+                    fontSize: '12px',
+                  }}
+                />
+                <Bar dataKey="healthy"  name="Healthy"  fill="#4ade80" radius={[4,4,0,0]} stackId="a" />
+                <Bar dataKey="diseased" name="Diseased" fill="#f87171" radius={[4,4,0,0]} stackId="a" />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+          <div className="flex items-center gap-4 mt-2">
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-sm bg-green-400" />
+              <span className="text-xs text-gray-400">Healthy</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-sm bg-red-400" />
+              <span className="text-xs text-gray-400">Diseased</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Pie chart — class breakdown */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <h2 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
+            <Microscope size={14} className="text-purple-400" />
+            Class Breakdown
+          </h2>
+          {classBreakdown.length === 0 ? (
+            <div className="h-48 flex items-center justify-center text-gray-600 text-sm">
+              No data yet
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie
+                  data={classBreakdown}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={80}
+                  paddingAngle={3}
+                  dataKey="value"
+                >
+                  {classBreakdown.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={LABEL_COLORS[entry.name] || '#9ca3af'}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#111827',
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                    color: '#f3f4f6',
+                    fontSize: '12px',
+                  }}
+                />
+                <Legend
+                  formatter={(value) => (
+                    <span style={{ color: '#9ca3af', fontSize: '11px', textTransform: 'capitalize' }}>
+                      {value.replace(/_/g, ' ')}
+                    </span>
+                  )}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
       {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
@@ -209,7 +359,7 @@ export default function DiseasePage() {
                   <div className="text-xs text-gray-500">
                     Tree {d.tree_id} · Block {d.block_id}
                   </div>
-                  <ConfidenceBar confidence={d.confidence} color="purple" />
+                  <ConfidenceBar confidence={d.confidence} />
                   <div className="text-xs text-gray-600 mt-1">{d.confidence}% confidence</div>
                 </button>
               ))
@@ -320,25 +470,26 @@ export default function DiseasePage() {
                     🌴
                   </div>
                   <div>
-                    <div className="text-sm text-gray-300">{selected.image_path}</div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      Image stored on IRIV PiControl local storage
-                    </div>
+                    <p className="text-xs text-gray-400 font-mono truncate max-w-xs">
+                      {selected.image_path || 'No image path recorded'}
+                    </p>
+                    <p className="text-xs text-gray-600 mt-1">
+                      {selected.disease_label === 'healthy'
+                        ? '✅ Tree appears healthy'
+                        : '⚠️ Disease indicators detected'}
+                    </p>
                   </div>
                 </div>
               </div>
 
             </div>
           ) : (
-            <div className="h-full flex items-center justify-center bg-gray-900 border border-gray-800 rounded-xl p-10">
-              <div className="text-center">
-                <Microscope size={40} className="text-gray-700 mx-auto mb-3" />
-                <p className="text-gray-500">Select a detection to view details</p>
-              </div>
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
+              <Microscope size={48} className="text-gray-700 mx-auto mb-3" />
+              <p className="text-gray-400">Select a detection to view details</p>
             </div>
           )}
         </div>
-
       </div>
     </div>
   )

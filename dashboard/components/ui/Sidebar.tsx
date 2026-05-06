@@ -1,5 +1,6 @@
 'use client'
 import Link from 'next/link'
+import {Map} from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
@@ -21,6 +22,7 @@ const navItems = [
   { href: '/disease/detect', label: 'AI Test',    icon: Camera },
   { href: '/security',       label: 'Security',   icon: Shield },
   { href: '/security/snapshots', label: 'Snapshots', icon: Camera },
+  { href: '/map', label: 'Block Map', icon: Map },
   { href: '/automation',     label: 'Automation', icon: Settings },
   { href: '/reports',        label: 'Reports',    icon: BarChart3 },
 ]

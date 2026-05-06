@@ -22,18 +22,20 @@
 - [x] Virtual environment (fyp_env) — Python 3.12
 - [x] PyTorch + CUDA 12.1 (RTX 3060 Laptop confirmed working)
 - [x] MySQL database (fyp_oil_palm) — 4 tables
-- [x] FastAPI backend — all 20 endpoints working on port 8000
+- [x] FastAPI backend — all endpoints working on port 8000
 - [x] MySQL → Supabase auto sync every 60 seconds
 - [x] Supabase RLS security enabled on all 4 tables
-- [x] Next.js 16 dashboard — 8 pages complete
-  - [x] Overview — live sensors, alerts, disease feed, offline indicator
-  - [x] Sensors — real-time charts, safe zones, time range selector
-  - [x] Disease AI — detection history, confidence bars, disease info
+- [x] Next.js 16 dashboard — 10 pages complete
+  - [x] Login — JWT authentication page
+  - [x] Overview — live sensors, alerts, disease feed, WS Live indicator
+  - [x] Sensors — real-time charts, safe zones, danger/warning banner
+  - [x] Disease AI — detection history, charts, confidence bars, disease info
   - [x] AI Test — upload image OR webcam → YOLOv8 inference live
   - [x] Security Monitor — Triple Layer Security with live camera
   - [x] Security Snapshots — gallery grid + lightbox + download ✅
   - [x] Automation — relay controls, rule management
   - [x] Reports — historical charts, CSV export
+  - [x] Block Map — plantation tree health visual map ✅
 - [x] Telegram bot — all alert types including security alerts with photo
 - [x] Daily Telegram summary at midnight ✅ (iriv_scripts/daily_summary.py)
 - [x] JWT Authentication ✅
@@ -41,6 +43,21 @@
   - [x] proxy.ts middleware — protects all routes
   - [x] Cookies: auth_token (24h) + username
   - [x] Logout button in sidebar with username display
+- [x] API JWT Protection ✅
+  - [x] HTTP middleware in main.py
+  - [x] Public routes: /health, /, /auth/login, /docs
+  - [x] All other endpoints require Bearer token
+  - [x] WebSocket connections skip JWT check
+- [x] PWA — Progressive Web App ✅
+  - [x] Installable on Android + iOS
+  - [x] manifest.json + icons generated
+  - [x] @ducanh2912/next-pwa package
+- [x] WebSocket real-time updates ✅
+  - [x] /sensors/ws/sensors — pushes data every 3s
+  - [x] /sensors/ws/alerts — pushes alert count every 5s
+  - [x] WS Live badge on Overview page
+  - [x] Works via Cloudflare tunnel with originRequest config
+  - [x] Falls back to polling when WS unavailable
 - [x] AI Model v1 — YOLOv8n (mAP50 59.1% standardised)
 - [x] AI Model v2 — YOLOv8s comparison (mAP50 52.3% standardised)
 - [x] AI Model v3 — YOLOv8n FINAL (mAP50 71.5% standardised) ✅
@@ -54,6 +71,17 @@
   - [x] Telegram alerts with photo + 30s cooldown
   - [x] Security event log in dashboard
   - [x] Security snapshots gallery page ✅
+- [x] Disease Detection History Chart ✅
+  - [x] Bar chart — last 7 days stacked healthy/diseased
+  - [x] Pie chart — class breakdown
+- [x] Sensor Safe Zone Alerts ✅
+  - [x] Red danger banner when sensor in danger zone
+  - [x] Yellow warning banner when sensor in warning zone
+- [x] Block/Tree Map View ✅
+  - [x] Visual grid of trees per block
+  - [x] Color coded by severity
+  - [x] Click tree for details panel
+  - [x] Block-A, Block-B, Block-C support
 - [x] Git LFS for model weights
 - [x] 3x backups — GitHub, D drive, Google Drive
 - [x] Cloudflared tunnel — FULLY WORKING ✅
@@ -61,6 +89,7 @@
   - [x] Dashboard: https://app.project2030.me
   - [x] API: https://api.project2030.me
   - [x] Domain: project2030.me (Namecheap → Cloudflare)
+  - [x] WebSocket via tunnel — originRequest config
 - [x] IRIV hardware scripts — all 6 complete + tested in simulation
 - [x] PSM2 FYP Report — ALL 6 CHAPTERS COMPLETE ✅
   - [x] Chapter 1 — Introduction
@@ -74,8 +103,6 @@
   - [x] MySQL + Supabase screenshots for Section 4.4
 
 ### 🔲 Todo
-- [ ] API endpoint JWT protection (Priority 2)
-- [ ] Progressive Web App PWA (Priority 3)
 - [ ] Annotate Kaggle images in Label Studio → retrain v4
 - [ ] IRIV hardware arrives → deploy + test
 - [ ] Full end-to-end field test
@@ -96,8 +123,8 @@ fyp-oil-palm/
 ├── live_sensors.py                ← Continuous live sensor updates
 ├── add_alerts.py                  ← Insert demo alerts
 ├── add_diseases.py                ← Insert demo disease detections
-├── check_versions.py              ← Check Roboflow dataset versions
-├── generate_versions.py           ← Generate Roboflow dataset versions
+├── add_block_data.py              ← Insert Block-A/B/C demo tree data
+├── test_sensors.py                ← Test sensor danger/warning values
 │
 ├── ai_model/
 │   ├── data.yaml                  ← Points to balanced (v1 datasets)
@@ -105,45 +132,33 @@ fyp-oil-palm/
 │   ├── datasets/
 │   │   ├── roboflow/              ← Original 3 datasets (v1)
 │   │   ├── roboflow_v2/           ← New 10 datasets (v2)
-│   │   │   ├── palm_leaf_disease/
-│   │   │   ├── indikasi_ganoderma/
-│   │   │   ├── binus_ganoderma_1/
-│   │   │   ├── binus_ganoderma_2/
-│   │   │   ├── tree_health_detection/
-│   │   │   ├── palm_oil_onmsi/
-│   │   │   ├── palm_leaf_ganoderma/
-│   │   │   └── oil_palm_health/
 │   │   ├── combined_v2/           ← Merged v2 (6,612 images)
 │   │   └── balanced_v2/           ← Balanced v2 — used for v3 training
 │   │       ├── train/ — healthy:4337, ganoderma:1803, unhealthy:2180, immature:1918
 │   │       ├── val/   — healthy:1031, ganoderma:306, unhealthy:464, immature:430
 │   │       └── test/  — healthy:535, ganoderma:167, unhealthy:239, immature:240
 │   ├── models/
-│   │   ├── best.pt                ← YOLOv8n v1 (disease detection)
-│   │   ├── best.onnx              ← YOLOv8n v1 ONNX
+│   │   ├── best.pt                ← YOLOv8n v1
 │   │   ├── best_v2_yolov8s.pt     ← YOLOv8s comparison
 │   │   ├── best_v3.pt             ← YOLOv8n v3 FINAL ✅ PRODUCTION
-│   │   └── best_v3.onnx           ← YOLOv8n v3 ONNX for IRIV ✅
+│   │   └── best_v3.onnx           ← ONNX for IRIV ✅
 │   ├── runs/
-│   │   ├── oil_palm_v1/           ← YOLOv8n v1 training results
-│   │   ├── oil_palm_v2/           ← YOLOv8s v2 training results
-│   │   ├── oil_palm_v3/           ← YOLOv8n v3 training results
 │   │   └── evaluation/            ← Confusion matrix + charts ✅
 │   └── training/
-│       ├── train.py               ← YOLOv8 training script
-│       ├── prepare_dataset.py     ← Dataset merger v2
-│       ├── balance_dataset_v2.py  ← Dataset balancer v2
-│       ├── download_datasets.py   ← Roboflow bulk downloader
-│       └── evaluate.py            ← Evaluate all 3 models
+│       ├── train.py
+│       ├── prepare_dataset.py
+│       ├── balance_dataset_v2.py
+│       ├── download_datasets.py
+│       └── evaluate.py            ← Evaluates all 3 models
 │
 ├── backend/
-│   ├── main.py                    ← FastAPI (port 8000) ✅
+│   ├── main.py                    ← FastAPI port 8000 + HTTP auth middleware
 │   ├── routes/
-│   │   ├── sensors.py             ✅
-│   │   ├── disease.py             ✅ includes /detect endpoint
+│   │   ├── sensors.py             ✅ + WebSocket /ws/sensors + /ws/alerts
+│   │   ├── disease.py             ✅ /detect endpoint
 │   │   ├── alerts.py              ✅
 │   │   ├── automation.py          ✅
-│   │   ├── security.py            ✅ Triple Layer Security + snapshots
+│   │   ├── security.py            ✅ Triple Layer + snapshots endpoints
 │   │   └── auth.py                ✅ JWT login/verify/logout
 │   ├── schemas/schemas.py         ✅
 │   └── database/
@@ -151,28 +166,36 @@ fyp-oil-palm/
 │       ├── init.sql               ✅
 │       └── supabase_sync.py       ✅
 │
-├── dashboard/                     ← Next.js 16 (port 3000)
+├── dashboard/                     ← Next.js 16 port 3000
 │   ├── proxy.ts                   ← Route protection middleware
-│   ├── next.config.ts             ← outputFileTracingRoot set
+│   ├── next.config.ts             ← PWA + outputFileTracingRoot
 │   ├── .env.local                 ← NEXT_PUBLIC_API_URL
+│   ├── hooks/
+│   │   └── useWebSocket.ts        ← WebSocket hooks for sensors + alerts
+│   ├── lib/
+│   │   └── api.ts                 ← axios instance with JWT interceptors
 │   ├── app/
 │   │   ├── login/page.tsx         ✅ JWT login page
-│   │   ├── page.tsx               ✅ Overview
-│   │   ├── sensors/page.tsx       ✅
-│   │   ├── disease/page.tsx       ✅
-│   │   ├── disease/detect/page.tsx ✅ Upload + webcam + live detection
+│   │   ├── page.tsx               ✅ Overview + WS Live badge
+│   │   ├── sensors/page.tsx       ✅ + danger/warning banner
+│   │   ├── disease/page.tsx       ✅ + history chart + pie chart
+│   │   ├── disease/detect/page.tsx ✅ Live webcam detection
 │   │   ├── security/page.tsx      ✅ Triple Layer Security Monitor
-│   │   ├── security/snapshots/page.tsx ✅ Snapshots gallery
+│   │   ├── security/snapshots/page.tsx ✅ Blob auth image loading
 │   │   ├── automation/page.tsx    ✅
-│   │   └── reports/page.tsx       ✅
+│   │   ├── reports/page.tsx       ✅
+│   │   └── map/page.tsx           ✅ Plantation Block Map
+│   ├── public/
+│   │   ├── manifest.json          ← PWA manifest
+│   │   └── icons/                 ← PWA icons 72-512px
 │   └── components/ui/
-│       ├── Sidebar.tsx            ✅ 8 nav items + logout button
+│       ├── Sidebar.tsx            ✅ 10 nav items + logout button
 │       ├── SensorCard.tsx         ✅
 │       ├── Skeleton.tsx           ✅
 │       ├── LiveIndicator.tsx      ✅
 │       └── ThemeToggle.tsx        ✅
 │
-├── iriv_scripts/                  ← All tested in simulation ✅
+├── iriv_scripts/
 │   ├── sensor_collector.py        ✅ RS485 + simulation mode
 │   ├── camera_capture.py          ✅ USB/CSI + simulation mode
 │   ├── inference_runner.py        ✅ ONNX inference + simulation
@@ -222,7 +245,7 @@ fyp-oil-palm/
 | Config | C:\Users\danes\.cloudflared\config.yml |
 | Credentials | C:\Users\danes\.cloudflared\26d38b6a-5222-40a0-a0a4-489fcbbfd610.json |
 
-**Config file** (`C:\Users\danes\.cloudflared\config.yml`):
+**Config file:**
 ```yaml
 tunnel: 26d38b6a-5222-40a0-a0a4-489fcbbfd610
 credentials-file: C:\Users\danes\.cloudflared\26d38b6a-5222-40a0-a0a4-489fcbbfd610.json
@@ -230,6 +253,12 @@ credentials-file: C:\Users\danes\.cloudflared\26d38b6a-5222-40a0-a0a4-489fcbbfd6
 ingress:
   - hostname: api.project2030.me
     service: http://localhost:8000
+    originRequest:
+      noTLSVerify: true
+      connectTimeout: 30s
+      tcpKeepAlive: 30s
+      keepAliveConnections: 100
+      keepAliveTimeout: 90s
   - hostname: app.project2030.me
     service: http://localhost:3000
   - service: http_status:404
@@ -250,7 +279,9 @@ Middleware:     dashboard/proxy.ts — export function proxy()
 Logout:         Sidebar logout button clears cookies → redirects /login
 Fix:            window.location.href = '/' after login (NOT router.push)
 Backend:        backend/routes/auth.py
-Endpoints:      POST /auth/login, GET /auth/verify, POST /auth/logout
+API Auth:       HTTP middleware in main.py (not global dependency)
+Public routes:  /health, /, /auth/login, /docs, /openapi.json, /redoc
+WebSocket:      Skips JWT check automatically (scope type check)
 ```
 
 ---
@@ -270,86 +301,109 @@ Library:  pip install schedule
 
 ## 🛡️ Triple Layer Security System
 
-### How It Works
 ```
-Layer 1 → PIR Sensor (GPIO 24)     → Hardware motion detection trigger
-Layer 2 → USB/CSI Camera           → Captures timestamped snapshot
-Layer 3 → YOLOv8n COCO model       → AI classifies person/animal/clear
+Layer 1 → PIR Sensor (GPIO 24)   → Hardware motion detection
+Layer 2 → USB/CSI Camera         → Timestamped snapshot capture
+Layer 3 → YOLOv8n COCO model     → AI threat classification
     ↓
-Person detected  → HIGH ALERT   → DB log + Telegram photo alert
-Animal detected  → MEDIUM ALERT → DB log + Telegram photo alert
-False alarm      → LOG ONLY     → No notification
+Person  → HIGH ALERT   → DB + Telegram photo alert
+Animal  → MEDIUM ALERT → DB + Telegram photo alert
+Clear   → No action
+
+Cooldown:  30 seconds
+Snapshots: captured_images/security/ (gitignored)
+Gallery:   /security/snapshots — blob auth image loading
+Download:  Blob approach with JWT token
 ```
 
-### Key Features
+---
+
+## 🗺️ Block/Tree Map
+
 ```
-✅ Eliminates false alarms from wind/shadows
-✅ Telegram photo alert with bounding box overlay
-✅ 30 second cooldown — prevents alert spam
-✅ Saves snapshots to captured_images/security/ (gitignored)
-✅ Security event log in dashboard
-✅ Security snapshots gallery at /security/snapshots
-✅ Camera selector — supports OBS Virtual Camera
-✅ Works in simulation on Windows
+Page:       /map
+Data:       disease_detections table (block_id + tree_id fields)
+Colors:     Green=None, Blue=Low, Yellow=Medium, Red=High severity
+Blocks:     Block-A, Block-B, Block-C (auto/test go to Other section)
+Click:      Tree square → shows details panel on right
+RTSP use:   Camera 1 → Block-A, Camera 2 → Block-B
+Demo data:  python add_block_data.py
 ```
 
-### Camera Indices (Windows Dev)
+---
+
+## 📊 Disease Charts
+
 ```
-Camera 0 → EOS Webcam (Canon)
-Camera 1 → OBS Virtual Camera ← Use this for testing
-Camera 2 → Another virtual camera
+Bar chart:  Last 7 days — stacked healthy vs diseased per day
+Pie chart:  Class breakdown — healthy/ganoderma/unhealthy/immature
+Location:   /disease page — above detection list
+Updates:    Every 10 seconds
+Library:    Recharts (BarChart + PieChart)
+```
+
+---
+
+## ⚡ Sensor Safe Zone Alerts
+
+```
+Location:   /sensors page — between header and sensor cards
+Danger:     Red banner — any sensor exceeds danger threshold
+Warning:    Yellow banner — any sensor exceeds warning threshold
+Thresholds:
+  Temperature:   warning >32°C, danger >35°C
+  Humidity:      warning <60%, danger <50%
+  Soil Moisture: warning <40%, danger <30%
+  EC Level:      warning <1.2, danger <1.0
+Test:       python test_sensors.py
+```
+
+---
+
+## 📱 PWA
+
+```
+Package:    @ducanh2912/next-pwa
+Manifest:   dashboard/public/manifest.json
+Icons:      dashboard/public/icons/ (72px to 512px)
+Install:    Android — Chrome menu → Add to Home Screen
+            iOS — Safari Share → Add to Home Screen
+Theme:      #22c55e (green)
+Background: #030712 (dark)
+```
+
+---
+
+## 🔌 WebSocket
+
+```
+Endpoints:
+  ws://localhost:8000/sensors/ws/sensors  ← sensor data every 3s
+  ws://localhost:8000/sensors/ws/alerts   ← alert count every 5s
+
+Hook:       dashboard/hooks/useWebSocket.ts
+Badge:      WS Live (green pulsing) on Overview page
+Tunnel:     wss://api.project2030.me (works via Cloudflare)
+Fallback:   Polling every 5s when WS unavailable
+Auth:       WebSocket skips JWT (scope type check in main.py)
 ```
 
 ---
 
 ## 🤖 AI Model — FINAL RESULTS
 
-### Production Model = V3
 ```
-Disease Detection: ai_model/models/best_v3.pt / best_v3.onnx
-Security:          yolov8n.pt (pretrained COCO — auto downloaded)
-```
-
-### Why 4 Classes (Not 5)
-Originally planned: healthy, ganoderma, bud_rot, crown_disease, fruit_bunch_rot.
-Changed to 4 because insufficient labelled data for bud_rot, crown_disease,
-fruit_bunch_rot. Merged into 'unhealthy'. 'immature' added to prevent false positives.
-
-### Class Definitions
-```
-0: healthy    → Normal healthy palm                          (severity: None)
-1: ganoderma  → Ganoderma Basal Stem Rot — bracket fungus   (severity: High)
-2: unhealthy  → General disease — Bud Rot, Crown Disease     (severity: Medium)
-3: immature   → Young/immature palm tree                     (severity: Low)
+Production:  best_v3.pt / best_v3.onnx (YOLOv8n, 71.5% mAP50)
+Security:    yolov8n.pt (pretrained COCO, auto downloaded)
+Classes:     [healthy, ganoderma, unhealthy, immature]
+Inference:   conf=0.5, iou=0.45 (disease) | conf=0.25 (security)
 ```
 
-### 3-Model Comparison (Standardised Test Set — 670 images)
-| Model | Architecture | Datasets | Images | mAP50 | Status |
-|---|---|---|---|---|---|
-| V1 | YOLOv8n | 3 | 5,725 | 59.1% | Baseline |
-| V2 | YOLOv8s | 3 | 5,725 | 52.3% | Architecture test |
-| V3 | YOLOv8n | 10 | 7,748 | **71.5%** | ✅ PRODUCTION |
-
-### Key Findings (For Report)
-```
-1. Dataset diversity > Architecture complexity
-   V2 (YOLOv8s bigger) scored LOWER than V1 (YOLOv8n)
-2. More diverse data = best improvement
-   V3 same arch as V1 but 10 datasets → +12.4% mAP50
-3. V3 is production model — 71.5% mAP50
-```
-
-### Inference
-```python
-# Disease detection
-from ultralytics import YOLO
-model = YOLO('ai_model/models/best_v3.pt')
-results = model('image.jpg', conf=0.5, iou=0.45)
-
-# Security detection (person/animal)
-model = YOLO('yolov8n.pt')  # pretrained COCO
-results = model('frame.jpg', conf=0.25)
-```
+| Model | Architecture | Images | mAP50 | Status |
+|---|---|---|---|---|
+| V1 | YOLOv8n | 5,725 | 59.1% | Baseline |
+| V2 | YOLOv8s | 5,725 | 52.3% | Architecture test |
+| V3 | YOLOv8n | 7,748 | **71.5%** | ✅ PRODUCTION |
 
 ---
 
@@ -361,27 +415,21 @@ results = model('frame.jpg', conf=0.25)
 | URL (remote) | https://api.project2030.me |
 | Docs | https://api.project2030.me/docs |
 | Database | MySQL 8.0 — fyp_oil_palm |
-| Cloud Sync | Supabase every 60s |
+| Sync | Supabase every 60s |
 
-**MySQL credentials:**
-```
-DB_USER=root
-DB_PASSWORD=fyp1234
-DB_HOST=localhost
-DB_PORT=3306
-DB_NAME=fyp_oil_palm
-MySQL path: C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe
-```
+**MySQL:** root / fyp1234 / localhost:3306 / fyp_oil_palm
 
 **All endpoints:**
 ```
 GET  /sensors/latest
 GET  /sensors/history?hours=24
 POST /sensors/
+WS   /sensors/ws/sensors          ← WebSocket live sensor push
+WS   /sensors/ws/alerts           ← WebSocket live alert count
 GET  /disease/history?limit=20
 GET  /disease/latest
 POST /disease/
-POST /disease/detect              ← image upload + YOLOv8 disease inference
+POST /disease/detect              ← YOLOv8 disease inference
 GET  /alerts/
 GET  /alerts/count
 POST /alerts/{id}/acknowledge
@@ -391,17 +439,18 @@ POST /automation/rules
 PATCH /automation/rules/{id}/toggle
 DELETE /automation/rules/{id}
 POST /automation/relay
-POST /security/detect             ← frame + YOLOv8n COCO security inference
+POST /security/detect             ← YOLOv8n COCO security inference
 GET  /security/events
 GET  /security/events/count
-GET  /security/snapshots          ← list snapshot files
-GET  /security/snapshot/{filename} ← serve snapshot image
+GET  /security/snapshots
+GET  /security/snapshot/{filename}
 POST /security/test-alert
-POST /auth/login                  ← JWT login
-GET  /auth/verify                 ← verify token
+POST /auth/login                  ← PUBLIC
+GET  /auth/verify
 POST /auth/logout
 POST /sync
-GET  /health
+GET  /health                      ← PUBLIC
+GET  /                            ← PUBLIC
 ```
 
 ---
@@ -415,21 +464,6 @@ alerts:             id, alert_type, message, sensor_value, threshold, acknowledg
 automation_rules:   id, rule_name, trigger_type, sensor_field, threshold_value, operator, relay_pin, is_active, last_triggered, created_at
 ```
 
-**Alert types:**
-```
-sensor:   soil_moisture, temperature, ec_level, humidity
-disease:  disease_detected
-relay:    relay_activated, relay_deactivated
-security: security_person, security_animal, security_unknown
-```
-
-**Default automation rules:**
-```
-Drip Irrigation  → soil_moisture < 40  → Relay 1
-Mist Cooling     → temperature > 35    → Relay 2
-Fertilizer Pump  → ec_level < 1.2      → Relay 3
-```
-
 ---
 
 ## 🖥️ Dashboard — Next.js 16
@@ -438,93 +472,75 @@ Fertilizer Pump  → ec_level < 1.2      → Relay 3
 |---|---|
 | Port (local) | 3000 |
 | URL (remote) | https://app.project2030.me |
-| Dev mode | npm run dev (inside dashboard folder) |
 | Production | npm run build then npm start |
-| Pages | 8 pages total |
+| .env.local | NEXT_PUBLIC_API_URL=https://api.project2030.me |
 
-**All pages:**
+**All 10 pages:**
 ```
-/login               → JWT login page
-/                    → Overview — live sensors, alerts, disease feed
-/sensors             → Real-time charts, safe zones, time range selector
-/disease             → Detection history, confidence bars, disease info
-/disease/detect      → Upload image OR webcam → YOLOv8 disease inference
-/security            → Triple Layer Security — live camera + event log
-/security/snapshots  → Security snapshots gallery + lightbox + download
-/automation          → Relay controls, rule management
-/reports             → Historical charts, CSV export
-```
-
-**dashboard/.env.local:**
-```
-NEXT_PUBLIC_API_URL=https://api.project2030.me
+/login               → JWT login
+/                    → Overview + WS Live badge
+/sensors             → Charts + danger/warning banner
+/disease             → Detection history + bar/pie charts
+/disease/detect      → Live webcam + upload detection
+/security            → Triple Layer Security monitor
+/security/snapshots  → Gallery + blob auth + download
+/automation          → Relay controls + rules
+/reports             → Historical charts + CSV export
+/map                 → Plantation Block/Tree Map
 ```
 
 ---
 
 ## 📲 Telegram Bot
 
-**All alert types:**
 ```
-alert_soil_moisture(value)
-alert_temperature(value)
-alert_humidity(value)
-alert_ec_level(value)
-alert_disease_detected(label, conf, severity, tree_id, block_id, image_path)
-notify_relay_activated(name, pin, reason)
-notify_relay_deactivated(name, pin)
-send_daily_summary(avg_temp, avg_hum, avg_soil, avg_ec, disease_count, alert_count)
-send_system_startup()
-send_security_telegram(threat_type, confidence, detections, snapshot_path)
+Test:     python iriv_scripts/telegram_bot.py
+Daily:    python iriv_scripts/daily_summary.py --now
+Alerts:   sensor, disease, relay, security + photo
 ```
-
-**Test:** `python iriv_scripts/telegram_bot.py`
-**Daily:** `python iriv_scripts/daily_summary.py --now`
 
 ---
 
 ## ☁️ Supabase
 
-| Detail | Value |
-|---|---|
-| URL | https://zltdegjlrgdrustyqcro.supabase.co |
-| Region | Singapore (SEA) |
-| RLS | Enabled on all 4 tables ✅ |
-| Sync | Auto every 60s |
+```
+URL:    https://zltdegjlrgdrustyqcro.supabase.co
+Region: Singapore
+RLS:    Enabled on all 4 tables
+Sync:   Auto every 60s
+```
 
 ---
 
 ## 💾 Backups
 
-| Location | Status | Contents |
-|---|---|---|
-| GitHub | ✅ | Code + model weights (Git LFS) |
-| D: drive | ✅ | Full project (robocopy) |
-| Google Drive | ✅ | Full project backup |
+| Location | Status |
+|---|---|
+| GitHub | ✅ Code + model weights (Git LFS) |
+| D: drive | ✅ Full project |
+| Google Drive | ✅ Full project |
 
 ---
 
 ## 🛠️ Local Dev
 
 ```powershell
-# Start everything
 cd C:\Users\danes\fyp-oil-palm
 fyp_env\Scripts\activate
 .\start_fyp.ps1
 
-# Local URLs
-# Dashboard: http://localhost:3000
-# API Docs:  http://localhost:8000/docs
-
-# Remote URLs (via Cloudflared)
-# Dashboard: https://app.project2030.me
-# API:       https://api.project2030.me
+# Local:  http://localhost:3000
+# Remote: https://app.project2030.me
+# Docs:   https://api.project2030.me/docs
 
 # Demo scripts
-python demo_data.py          # Insert escalating sensor data
-python live_sensors.py       # Continuous live sensor updates
-python add_alerts.py         # Insert demo alerts
-python add_diseases.py       # Insert demo disease detections
+python demo_data.py          # sensor data
+python live_sensors.py       # continuous live sensors
+python add_alerts.py         # demo alerts
+python add_diseases.py       # demo disease detections
+python add_block_data.py     # Block-A/B/C tree data
+python test_sensors.py       # test danger/warning banners
+python iriv_scripts/daily_summary.py --now  # test Telegram summary
 
 # Git push on uni WiFi
 git config --global http.sslVerify false
@@ -534,32 +550,13 @@ git config --global http.sslVerify true
 
 ---
 
-## 📝 PSM2 Report Status — 100% COMPLETE ✅
+## 📝 PSM2 Report — 100% COMPLETE ✅
 
-```
-✅ Chapter 1 — Introduction
-✅ Chapter 2 — Literature Review
-✅ Chapter 3 — System Development Methodology
-✅ Chapter 4 — Requirement Analysis and Design
-✅ Chapter 5 — Implementation and Testing
-✅ Chapter 6 — Conclusion
-✅ Use Case Diagram (4.2.3)
-✅ Sequence Diagram (4.2.4) — Triple Layer Security pipeline
-✅ Activity Diagram (4.2.5) — Disease detection pipeline
-✅ System Architecture (4.3.1) — 4-layer diagram
-✅ Class Diagram (4.3.2) — 7 classes
-✅ ERD (4.4) — 4 tables with relationships
-✅ Abstract
-✅ Table of Contents
-✅ List of Figures
-✅ List of Tables
-✅ References / Bibliography
-✅ MySQL + Supabase screenshots for Section 4.4
-```
+All 6 chapters + diagrams + abstract + TOC + references + MySQL/Supabase screenshots
 
 ---
 
-## 🚀 IRIV Deployment Checklist (When Hardware Arrives)
+## 🚀 IRIV Deployment Checklist
 
 ```
 1.  Flash Raspberry Pi OS
@@ -593,43 +590,43 @@ git config --global http.sslVerify true
 
 1. Never use Node-RED — custom Next.js only
 2. Never use Grafana — charts in Next.js
-3. Backend is FastAPI — lightweight only
-4. IRIV uses ONNX — use best_v3.onnx NOT .pt
-5. Database is MySQL — NOT SQLite/PostgreSQL
-6. RS485 port is `/dev/ttyS0` on IRIV
-7. ADS1115 I²C is `0x48`
-8. Sensor polling in `iriv_scripts/sensor_collector.py`
-9. Dashboard fetches from FastAPI only
-10. Import paths use `backend.` prefix
-11. All `__init__.py` files are empty
-12. MySQL local password is `fyp1234`
-13. Dashboard has its own `.env.local`
-14. Supabase URL: https://zltdegjlrgdrustyqcro.supabase.co
-15. YOLOv8 disease inference: conf=0.5, iou=0.45
-16. Disease model classes: [healthy, ganoderma, unhealthy, immature]
-17. IRIV scripts have simulation mode — ON_IRIV = sys.platform == 'linux'
-18. PRODUCTION disease model is V3 — best_v3.pt / best_v3.onnx
-19. Supabase RLS enabled — use service role key for backend
-20. Git push on uni WiFi: disable sslVerify, push, re-enable
-21. Dataset v2 has 7,748 images from 10 Roboflow datasets
-22. data_v2.yaml points to balanced_v2 dataset
-23. /disease/detect uses disease model (YOLOv8n v3)
-24. /security/detect uses COCO model (yolov8n.pt pretrained)
-25. Security cooldown is 30 seconds between alerts
-26. PIR sensor GPIO pin is 24 on IRIV
-27. OBS Virtual Camera is Camera index 1 on dev laptop
-28. Dashboard has 8 pages including login and snapshots gallery
-29. security_monitor.py implements Triple Layer Security
-30. evaluate.py evaluates all 3 models on same standardised test set
-31. PSM2 report all 6 chapters 100% complete
-32. npm run dev conflicts with Cloudflared — use npm run build + npm start for production
-33. Cloudflared named tunnel: fyp-oil-palm — run with: cloudflared tunnel run fyp-oil-palm
-34. Domain: project2030.me — Dashboard: app.project2030.me — API: api.project2030.me
-35. Tunnel ID: 26d38b6a-5222-40a0-a0a4-489fcbbfd610
-36. dashboard/.env.local NEXT_PUBLIC_API_URL must be https://api.project2030.me for production
-37. JWT users: admin/fyp2024, danesh/oilpalm2024
-38. Login fix: window.location.href = '/' not router.push after login
-39. proxy.ts export must be named proxy not middleware
-40. captured_images/ is gitignored — never commit images to GitHub
-41. Daily summary test: python iriv_scripts/daily_summary.py --now
-42. Snapshots served via GET /security/snapshot/{filename} as FileResponse
+3. Backend is FastAPI only
+4. IRIV uses ONNX — best_v3.onnx NOT .pt
+5. Database is MySQL NOT SQLite/PostgreSQL
+6. RS485 port is /dev/ttyS0 on IRIV
+7. ADS1115 I2C is 0x48
+8. Import paths use backend. prefix
+9. All __init__.py files are empty
+10. MySQL password is fyp1234
+11. Dashboard has its own .env.local
+12. Supabase URL: https://zltdegjlrgdrustyqcro.supabase.co
+13. Disease inference: conf=0.5, iou=0.45
+14. Security inference: conf=0.25 (COCO model)
+15. Disease classes: [healthy, ganoderma, unhealthy, immature]
+16. IRIV scripts use ON_IRIV = sys.platform == 'linux'
+17. PRODUCTION model is V3 — best_v3.pt / best_v3.onnx
+18. Supabase RLS enabled — use service role key
+19. Git push on uni WiFi: disable sslVerify, push, re-enable
+20. npm run dev conflicts with Cloudflared — use build+start
+21. Cloudflared tunnel: cloudflared tunnel run fyp-oil-palm
+22. Domain: project2030.me — app.project2030.me / api.project2030.me
+23. Tunnel ID: 26d38b6a-5222-40a0-a0a4-489fcbbfd610
+24. NEXT_PUBLIC_API_URL=https://api.project2030.me for production
+25. proxy.ts export must be named proxy not middleware
+26. Login fix: window.location.href = '/' not router.push
+27. JWT users: admin/fyp2024, danesh/oilpalm2024
+28. Security cooldown: 30 seconds
+29. PIR GPIO pin: 24
+30. OBS Virtual Camera: index 1 on dev laptop
+31. Daily summary test: python iriv_scripts/daily_summary.py --now
+32. captured_images/ is gitignored — do not commit images
+33. Dashboard has 10 pages including login, snapshots, map
+34. Snapshots use blob loading with JWT — not direct img src
+35. WebSocket skips JWT via scope type check in main.py
+36. API auth uses HTTP middleware not global Depends
+37. PWA uses @ducanh2912/next-pwa package
+38. Block map at /map — block_id format: Block-A, Block-B, Block-C
+39. RTSP Camera 1 = Block-A, Camera 2 = Block-B convention
+40. lib/api.ts exports api (axios with JWT interceptors)
+41. Security snapshots images need blob fetch — use api.get(url, {responseType: blob})
+42. PSM2 report 100% complete

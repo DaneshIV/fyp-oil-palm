@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { sensorApi } from '@/lib/api'
-import { RefreshCw, Thermometer, Droplets, Sprout, Zap } from 'lucide-react'
+import { RefreshCw, Thermometer, Droplets, Sprout, Zap, AlertTriangle } from 'lucide-react'
 import {
   LineChart,
   Line,
@@ -213,6 +213,35 @@ export default function SensorsPage() {
         </div>
       )}
 
+      {/* Alert Banner — shows when any sensor is in danger/warning */}
+      {latest && (() => {
+        const dangerSensors  = SENSORS.filter(s => getStatus(s, latest[s.key as keyof SensorReading] as number) === 'danger')
+        const warningSensors = SENSORS.filter(s => getStatus(s, latest[s.key as keyof SensorReading] as number) === 'warning')
+
+        if (dangerSensors.length === 0 && warningSensors.length === 0) return null
+
+        return (
+          <div className={`rounded-xl border p-4 flex items-start gap-3 ${
+            dangerSensors.length > 0
+              ? 'bg-red-500/10 border-red-500/30'
+              : 'bg-yellow-500/10 border-yellow-500/30'
+          }`}>
+            <AlertTriangle size={18} className={dangerSensors.length > 0 ? 'text-red-400 mt-0.5' : 'text-yellow-400 mt-0.5'} />
+            <div>
+              <p className={`text-sm font-semibold ${dangerSensors.length > 0 ? 'text-red-400' : 'text-yellow-400'}`}>
+                {dangerSensors.length > 0 ? '🔴 DANGER — Immediate action required!' : '🟡 WARNING — Monitor closely'}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                {[...dangerSensors, ...warningSensors].map(s => {
+                  const value = latest[s.key as keyof SensorReading] as number
+                  return `${s.label}: ${value.toFixed(s.key === 'ec_level' ? 2 : 1)}${s.unit}`
+                }).join(' · ')}
+              </p>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {SENSORS.map(sensor => (
@@ -288,6 +317,11 @@ export default function SensorsPage() {
       <div className="text-xs text-gray-600 text-center">
         Last updated: {format(lastUpdated, 'HH:mm:ss')} · Auto-refreshes every 5s
       </div>
+
+      
+
+
+
 
     </div>
   )
