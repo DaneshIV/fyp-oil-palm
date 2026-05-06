@@ -7,6 +7,7 @@ import { SensorCardSkeleton } from '@/components/ui/Skeleton'
 import ThemeToggle from '@/components/ui/ThemeToggle'
 import { AlertTriangle, CheckCircle, RefreshCw, Wifi } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
+import { useSensorWebSocket, useAlertWebSocket } from '@/hooks/useWebSocket'
 
 interface SensorData {
   temperature: number
@@ -40,6 +41,8 @@ export default function OverviewPage() {
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date())
   const [isOnline, setIsOnline] = useState(true)
+  const { data: wsData, connected: wsConnected } = useSensorWebSocket()
+  const { unacknowledged: wsAlerts } = useAlertWebSocket()
 
   /*const fetchData = async () => {
     try {
@@ -169,62 +172,68 @@ export default function OverviewPage() {
     </p>
   </div>
   <div className="flex items-center gap-2 text-xs">
-    <Wifi size={14} className={isOnline ? 'text-green-400' : 'text-red-400'} />
-    <span className={isOnline ? 'text-green-400' : 'text-red-400 font-semibold'}>
-      {isOnline
-        ? `Live — updated ${formatDistanceToNow(lastUpdated)} ago`
-        : '⚠️ OFFLINE — Cannot reach server'}
-    </span>
-    <ThemeToggle />
-    <button
-      onClick={fetchData}
-      className="p-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors"
-    >
-      <RefreshCw size={14} className={isOnline ? 'text-gray-400' : 'text-red-400'} />
-    </button>
-  </div>
+  {wsConnected && (
+    <div className="flex items-center gap-1 px-2 py-1 bg-green-500/10 border border-green-500/30 rounded-full">
+      <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+      <span className="text-green-400">WS Live</span>
+    </div>
+  )}
+  <Wifi size={14} className={isOnline ? 'text-green-400' : 'text-red-400'} />
+  <span className={isOnline ? 'text-green-400' : 'text-red-400 font-semibold'}>
+    {isOnline
+      ? `Live — updated ${formatDistanceToNow(lastUpdated)} ago`
+      : '⚠️ OFFLINE — Cannot reach server'}
+  </span>
+  <ThemeToggle />
+  <button
+    onClick={fetchData}
+    className="p-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors"
+  >
+    <RefreshCw size={14} className={isOnline ? 'text-gray-400' : 'text-red-400'} />
+  </button>
+</div>
 </div>
 
       {/* Sensor Cards */}
-      {sensors ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <SensorCard
-            label="Temperature"
-            value={sensors.temperature.toFixed(1)}
-            unit="°C"
-            icon="🌡️"
-            status={getSensorStatus('temperature', sensors.temperature)}
-            safeRange="22–35°C"
-            live
-          />
-          <SensorCard
-            label="Humidity"
-            value={sensors.humidity.toFixed(1)}
-            unit="%"
-            icon="💧"
-            status={getSensorStatus('humidity', sensors.humidity)}
-            safeRange="60–85%"
-            live
-          />
-          <SensorCard
-            label="Soil Moisture"
-            value={sensors.soil_moisture.toFixed(1)}
-            unit="%"
-            icon="🌱"
-            status={getSensorStatus('soil_moisture', sensors.soil_moisture)}
-            safeRange="40–70%"
-            live
-          />
-          <SensorCard
-            label="EC Level"
-            value={sensors.ec_level.toFixed(2)}
-            unit="mS/cm"
-            icon="⚡"
-            status={getSensorStatus('ec', sensors.ec_level)}
-            safeRange="1.2–2.2 mS/cm"
-            live
-          />
-        </div>
+      {(wsData || sensors) ? (
+  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <SensorCard
+      label="Temperature"
+      value={(wsData?.temperature ?? sensors?.temperature ?? 0).toFixed(1)}
+      unit="°C"
+      icon="🌡️"
+      status={getSensorStatus('temperature', wsData?.temperature ?? sensors?.temperature ?? 0)}
+      safeRange="22–35°C"
+      live
+    />
+    <SensorCard
+      label="Humidity"
+      value={(wsData?.humidity ?? sensors?.humidity ?? 0).toFixed(1)}
+      unit="%"
+      icon="💧"
+      status={getSensorStatus('humidity', wsData?.humidity ?? sensors?.humidity ?? 0)}
+      safeRange="60–85%"
+      live
+    />
+    <SensorCard
+      label="Soil Moisture"
+      value={(wsData?.soil_moisture ?? sensors?.soil_moisture ?? 0).toFixed(1)}
+      unit="%"
+      icon="🌱"
+      status={getSensorStatus('soil_moisture', wsData?.soil_moisture ?? sensors?.soil_moisture ?? 0)}
+      safeRange="40–70%"
+      live
+    />
+    <SensorCard
+      label="EC Level"
+      value={(wsData?.ec_level ?? sensors?.ec_level ?? 0).toFixed(2)}
+      unit="mS/cm"
+      icon="⚡"
+      status={getSensorStatus('ec', wsData?.ec_level ?? sensors?.ec_level ?? 0)}
+      safeRange="1.2–2.2 mS/cm"
+      live
+    />
+  </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <SensorCardSkeleton />
@@ -241,7 +250,7 @@ export default function OverviewPage() {
           <div className={`text-3xl font-bold ${
             unacknowledgedAlerts.length > 0 ? 'text-red-400' : 'text-green-400'
           }`}>
-            {unacknowledgedAlerts.length}
+            {wsAlerts || unacknowledgedAlerts.length}
           </div>
         </div>
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">

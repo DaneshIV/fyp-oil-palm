@@ -2,9 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Camera, RefreshCw, Download, X, ChevronLeft, ChevronRight } from 'lucide-react'
-import axios from 'axios'
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+import { api as axios } from '@/lib/api'
 
 interface Snapshot {
   filename: string
@@ -18,10 +16,15 @@ export default function SnapshotsPage() {
   const [loading,    setLoading]    = useState(true)
   const [selected,   setSelected]   = useState<Snapshot | null>(null)
   const [currentIdx, setCurrentIdx] = useState(0)
+  const [imageUrls,  setImageUrls]  = useState<Record<string, string>>({})
+  const [mounted,    setMounted]    = useState(false)
+
+  // Fix hydration error
+  useEffect(() => { setMounted(true) }, [])
 
   const fetchSnapshots = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_URL}/security/snapshots`)
+      const res = await axios.get('/security/snapshots')
       setSnapshots(res.data)
     } catch (err) {
       console.error(err)
@@ -33,6 +36,24 @@ export default function SnapshotsPage() {
   useEffect(() => {
     fetchSnapshots()
   }, [fetchSnapshots])
+
+  // Fetch images with auth token
+  useEffect(() => {
+    if (snapshots.length === 0) return
+    const fetchImages = async () => {
+      const urls: Record<string, string> = {}
+      for (const snap of snapshots.slice(0, 50)) {
+        try {
+          const res = await axios.get(snap.url, { responseType: 'blob' })
+          urls[snap.filename] = URL.createObjectURL(res.data)
+        } catch (e) {
+          console.error('Failed to fetch image:', snap.filename)
+        }
+      }
+      setImageUrls(urls)
+    }
+    fetchImages()
+  }, [snapshots])
 
   const openImage = (snapshot: Snapshot, idx: number) => {
     setSelected(snapshot)
@@ -53,6 +74,21 @@ export default function SnapshotsPage() {
     setSelected(snapshots[newIdx])
   }
 
+  const handleDownload = async (e: React.MouseEvent, snap: Snapshot) => {
+    e.stopPropagation()
+    try {
+      const res  = await axios.get(snap.url, { responseType: 'blob' })
+      const url  = URL.createObjectURL(res.data)
+      const link = document.createElement('a')
+      link.href     = url
+      link.download = snap.filename
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Download failed:', err)
+    }
+  }
+
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -69,10 +105,9 @@ export default function SnapshotsPage() {
       second: '2-digit'
     })
 
-  const todayCount = snapshots.filter(s => {
-    const d = new Date(s.created)
-    return d.toDateString() === new Date().toDateString()
-  }).length
+  const todayCount = mounted
+    ? snapshots.filter(s => new Date(s.created).toDateString() === new Date().toDateString()).length
+    : 0
 
   const totalSize = snapshots.length > 0
     ? formatSize(snapshots.reduce((acc, s) => acc + s.size, 0))
@@ -142,12 +177,17 @@ export default function SnapshotsPage() {
               onClick={() => openImage(snap, idx)}
               className="group relative aspect-video bg-gray-900 border border-gray-800 rounded-xl overflow-hidden cursor-pointer hover:border-blue-500/50 transition-all"
             >
-              <img
-                src={`${API_URL}${snap.url}`}
-                alt={snap.filename}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                loading="lazy"
-              />
+              {imageUrls[snap.filename] ? (
+                <img
+                  src={imageUrls[snap.filename]}
+                  alt={snap.filename}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+              ) : (
+                <div className="w-full h-full bg-gray-800 animate-pulse flex items-center justify-center">
+                  <Camera size={20} className="text-gray-600" />
+                </div>
+              )}
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent opacity-0 group-hover:opacity-100 transition-opacity">
                 <div className="absolute bottom-2 left-2 right-2">
                   <p className="text-white text-xs truncate">{snap.filename}</p>
@@ -169,7 +209,6 @@ export default function SnapshotsPage() {
             className="relative max-w-4xl w-full"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Close button */}
             <button
               onClick={closeImage}
               className="absolute -top-10 right-0 text-white hover:text-gray-300"
@@ -177,14 +216,16 @@ export default function SnapshotsPage() {
               <X size={24} />
             </button>
 
-            {/* Image */}
-            <img
-              src={`${API_URL}${selected.url}`}
-              alt={selected.filename}
-              className="w-full rounded-xl"
-            />
+            {imageUrls[selected.filename] ? (
+              <img
+                src={imageUrls[selected.filename]}
+                alt={selected.filename}
+                className="w-full rounded-xl"
+              />
+            ) : (
+              <div className="w-full aspect-video bg-gray-800 rounded-xl animate-pulse" />
+            )}
 
-            {/* Info bar */}
             <div className="flex items-center justify-between mt-3 px-1">
               <div>
                 <p className="text-white text-sm font-semibold">{selected.filename}</p>
@@ -192,20 +233,15 @@ export default function SnapshotsPage() {
                   {formatTime(selected.created)} · {formatSize(selected.size)}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <a
-                  href={`${API_URL}${selected.url}`}
-                  download={selected.filename}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs text-gray-300 transition-colors"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Download size={12} />
-                  Download
-                </a>
-              </div>
+              <button
+                onClick={(e) => handleDownload(e, selected)}
+                className="flex items-center gap-1 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs text-gray-300 transition-colors"
+              >
+                <Download size={12} />
+                Download
+              </button>
             </div>
 
-            {/* Prev / Next */}
             {snapshots.length > 1 && (
               <>
                 <button

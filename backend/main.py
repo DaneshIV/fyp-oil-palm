@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import JSONResponse
 from backend.routes import sensors, disease, alerts, automation
 from backend.routes import security as security_router
 from backend.routes import auth
@@ -15,37 +16,51 @@ import os
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-SECRET_KEY   = os.getenv("JWT_SECRET_KEY", "fyp-oil-palm-secret-key-2024")
-ALGORITHM    = "HS256"
-http_bearer  = HTTPBearer(auto_error=False)
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "fyp-oil-palm-secret-key-2024")
+ALGORITHM  = "HS256"
 
-# Public routes — no auth needed
-PUBLIC_ROUTES = {"/health", "/", "/auth/login", "/docs", "/openapi.json", "/redoc"}
-
-def check_token(
-    request:     Request,
-    credentials: HTTPAuthorizationCredentials = Depends(http_bearer)
-):
-    # Skip auth for public routes
-    if request.url.path in PUBLIC_ROUTES:
-        return None
-    if credentials is None:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    try:
-        payload  = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
-        username = payload.get("sub")
-        if not username:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        return username
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+PUBLIC_ROUTES = {
+    "/health", "/", "/auth/login",
+    "/docs", "/openapi.json", "/redoc"
+}
 
 app = FastAPI(
     title="FYP Oil Palm IoT API",
     description="Backend API for Oil Palm IoT Monitoring & Disease Detection",
-    version="1.0.0",
-    dependencies=[Depends(check_token)]
+    version="1.0.0"
 )
+
+# ── Auth Middleware ───────────────────────────────────────────
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    # Always allow WebSocket and public routes
+    if request.url.path in PUBLIC_ROUTES:
+        return await call_next(request)
+
+    # Get token from Authorization header
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Authentication required"}
+        )
+
+    token = auth_header.split(" ")[1]
+    try:
+        payload  = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+        if not username:
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Invalid token"}
+            )
+    except JWTError:
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Invalid or expired token"}
+        )
+
+    return await call_next(request)
 
 app.add_middleware(
     CORSMiddleware,

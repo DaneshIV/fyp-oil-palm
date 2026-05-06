@@ -6,7 +6,7 @@ import {
   CheckCircle, RefreshCw, Eye, User,
   Bird, HelpCircle, ShieldAlert, ShieldCheck
 } from 'lucide-react'
-import axios from 'axios'
+import { api as axios } from '@/lib/api'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -607,3 +607,4 @@ export default function SecurityPage() {
     </div>
   )
 }
+
