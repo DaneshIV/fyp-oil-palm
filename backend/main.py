@@ -21,7 +21,7 @@ ALGORITHM  = "HS256"
 
 PUBLIC_ROUTES = {
     "/health", "/", "/auth/login",
-    "/docs", "/openapi.json", "/redoc"
+    "/docs", "/openapi.json", "/redoc","/favicon.ico"
 }
 
 app = FastAPI(

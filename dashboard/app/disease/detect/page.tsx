@@ -2,20 +2,21 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Upload, Camera, Microscope, RefreshCw, CheckCircle, AlertTriangle, Radio } from 'lucide-react'
-import {useRouter} from 'next/navigation'
+import { api } from '@/lib/api'
+
 interface Detection {
   class_name: string
   confidence: number
-  severity: string
+  severity:   string
 }
 
 interface DetectionResult {
-  success: boolean
-  image_path: string
-  best_detection: Detection
-  all_detections: Detection[]
+  success:          boolean
+  image_path:       string
+  best_detection:   Detection
+  all_detections:   Detection[]
   total_detections: number
-  error?: string
+  error?:           string
 }
 
 const SEVERITY_STYLES: Record<string, string> = {
@@ -33,49 +34,37 @@ const CLASS_COLORS: Record<string, string> = {
 }
 
 export default function DetectPage() {
-  const [result, setResult]             = useState<DetectionResult | null>(null)
-  const [loading, setLoading]           = useState(false)
-  const [preview, setPreview]           = useState<string | null>(null)
-  const [mode, setMode]                 = useState<'upload' | 'webcam'>('upload')
-  const [streaming, setStreaming]       = useState(false)
+  const [result,       setResult]       = useState<DetectionResult | null>(null)
+  const [loading,      setLoading]      = useState(false)
+  const [preview,      setPreview]      = useState<string | null>(null)
+  const [mode,         setMode]         = useState<'upload' | 'webcam'>('upload')
+  const [streaming,    setStreaming]     = useState(false)
   const [liveDetection, setLiveDetection] = useState(false)
-  const [liveResult, setLiveResult]     = useState<DetectionResult | null>(null)
-  const [fps, setFps]                   = useState(0)
-  const [frameCount, setFrameCount]     = useState(0)
+  const [liveResult,   setLiveResult]   = useState<DetectionResult | null>(null)
+  const [frameCount,   setFrameCount]   = useState(0)
 
-  const fileInputRef  = useRef<HTMLInputElement>(null)
-  const videoRef      = useRef<HTMLVideoElement>(null)
-  const canvasRef     = useRef<HTMLCanvasElement>(null)
-  const streamRef     = useRef<MediaStream | null>(null)
+  const fileInputRef    = useRef<HTMLInputElement>(null)
+  const videoRef        = useRef<HTMLVideoElement>(null)
+  const canvasRef       = useRef<HTMLCanvasElement>(null)
+  const streamRef       = useRef<MediaStream | null>(null)
   const liveIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  const fpsIntervalRef  = useRef<NodeJS.Timeout | null>(null)
   const frameCountRef   = useRef(0)
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-
-  const captureFrame = useCallback((): Blob | null => {
-    if (!videoRef.current || !canvasRef.current) return null
-    const canvas  = canvasRef.current
-    const video   = videoRef.current
-    canvas.width  = video.videoWidth
-    canvas.height = video.videoHeight
-    canvas.getContext('2d')?.drawImage(video, 0, 0)
-    return null // will use toBlob async
-  }, [])
-
-  const runDetection = async (file: File) => {
+  // Run detection using api instance with JWT
+  const runDetection = useCallback(async (file: File): Promise<DetectionResult | null> => {
     try {
       const formData = new FormData()
       formData.append('file', file)
-      const res  = await fetch(`${API_URL}/disease/detect`, {
-        method: 'POST',
-        body:   formData,
+      const res = await api.post('/disease/detect', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 30000,
       })
-      return await res.json()
-    } catch {
+      return res.data
+    } catch (err: any) {
+      console.error('Detection error:', err?.response?.data || err?.message)
       return null
     }
-  }
+  }, [])
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -133,7 +122,6 @@ export default function DetectPage() {
     setLiveDetection(true)
     frameCountRef.current = 0
 
-    // Run detection every 1.5 seconds
     liveIntervalRef.current = setInterval(async () => {
       if (!videoRef.current || !canvasRef.current) return
       const canvas  = canvasRef.current
@@ -153,27 +141,17 @@ export default function DetectPage() {
         }
       }, 'image/jpeg', 0.8)
     }, 1500)
-
-    // FPS counter
-    fpsIntervalRef.current = setInterval(() => {
-      setFps(Math.round(frameCountRef.current / 1))
-      frameCountRef.current = 0
-    }, 1000)
   }
 
   const stopLiveDetection = () => {
     setLiveDetection(false)
     setLiveResult(null)
-    setFps(0)
+    setFrameCount(0)
     if (liveIntervalRef.current) clearInterval(liveIntervalRef.current)
-    if (fpsIntervalRef.current)  clearInterval(fpsIntervalRef.current)
   }
 
-  // Cleanup on unmount
   useEffect(() => {
-    return () => {
-      stopWebcam()
-    }
+    return () => { stopWebcam() }
   }, [])
 
   const reset = () => {
@@ -199,7 +177,10 @@ export default function DetectPage() {
           </p>
         </div>
         {!liveDetection && result && (
-          <button onClick={reset} className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-gray-300 transition-colors">
+          <button
+            onClick={reset}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
+          >
             <RefreshCw size={16} />
             Reset
           </button>
@@ -260,16 +241,14 @@ export default function DetectPage() {
           {mode === 'webcam' && (
             <div className="space-y-3">
 
-              {/* Live detection badge */}
               {liveDetection && (
                 <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-lg">
                   <Radio size={14} className="text-red-400 animate-pulse" />
                   <span className="text-red-400 text-xs font-semibold">LIVE DETECTION</span>
-                  <span className="text-gray-500 text-xs ml-auto">{frameCount} frames processed</span>
+                  <span className="text-gray-500 text-xs ml-auto">{frameCount} frames</span>
                 </div>
               )}
 
-              {/* Video feed */}
               <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden relative">
                 <video
                   ref={videoRef}
@@ -280,7 +259,6 @@ export default function DetectPage() {
                   playsInline
                 />
 
-                {/* Live result overlay on video */}
                 {liveDetection && liveResult?.success && (
                   <div className="absolute top-3 left-3 right-3">
                     <div className={`rounded-lg px-3 py-2 backdrop-blur-sm bg-black/60 border ${
@@ -319,7 +297,6 @@ export default function DetectPage() {
 
               <canvas ref={canvasRef} className="hidden" />
 
-              {/* Webcam controls */}
               {!streaming ? (
                 <button
                   onClick={startWebcam}
@@ -329,7 +306,6 @@ export default function DetectPage() {
                 </button>
               ) : (
                 <div className="space-y-2">
-                  {/* Live Detection button */}
                   {!liveDetection ? (
                     <button
                       onClick={startLiveDetection}
@@ -348,7 +324,6 @@ export default function DetectPage() {
                     </button>
                   )}
 
-                  {/* Manual capture button */}
                   {!liveDetection && (
                     <button
                       onClick={captureAndDetect}
@@ -369,7 +344,6 @@ export default function DetectPage() {
             </div>
           )}
 
-          {/* Preview (upload mode) */}
           {mode === 'upload' && preview && (
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
               <p className="text-xs text-gray-500 px-3 py-2 border-b border-gray-800">Preview</p>
@@ -380,7 +354,6 @@ export default function DetectPage() {
 
         {/* Right — Results */}
         <div>
-          {/* Loading */}
           {loading && !liveDetection && (
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 flex flex-col items-center justify-center gap-3">
               <RefreshCw size={32} className="text-purple-400 animate-spin" />
@@ -389,7 +362,6 @@ export default function DetectPage() {
             </div>
           )}
 
-          {/* No result yet */}
           {!loading && !activeResult && (
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 flex flex-col items-center justify-center gap-3 h-full min-h-48">
               <Microscope size={40} className="text-gray-700" />
@@ -401,12 +373,10 @@ export default function DetectPage() {
             </div>
           )}
 
-          {/* Results */}
           {activeResult && (
             <div className="space-y-4">
               {activeResult.success ? (
                 <>
-                  {/* Live indicator */}
                   {liveDetection && (
                     <div className="flex items-center gap-2 text-xs text-red-400">
                       <Radio size={12} className="animate-pulse" />
@@ -414,7 +384,6 @@ export default function DetectPage() {
                     </div>
                   )}
 
-                  {/* Best Detection */}
                   <div className={`rounded-xl border p-5 ${
                     activeResult.best_detection.severity === 'High'   ? 'border-red-500/30 bg-red-500/5' :
                     activeResult.best_detection.severity === 'Medium' ? 'border-yellow-500/30 bg-yellow-500/5' :
@@ -431,7 +400,6 @@ export default function DetectPage() {
                       {activeResult.best_detection.class_name.replace('_', ' ')}
                     </div>
 
-                    {/* Confidence bar */}
                     <div className="mb-3">
                       <div className="flex justify-between text-xs mb-1">
                         <span className="text-gray-400">Confidence</span>
@@ -464,7 +432,6 @@ export default function DetectPage() {
                     )}
                   </div>
 
-                  {/* All detections */}
                   {activeResult.all_detections.length > 1 && (
                     <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                       <h3 className="text-xs font-semibold text-gray-400 mb-3">
@@ -497,7 +464,7 @@ export default function DetectPage() {
                     <AlertTriangle size={16} />
                     <span className="font-semibold">Detection Failed</span>
                   </div>
-                  <p className="text-gray-400 text-sm">{activeResult.error}</p>
+                  <p className="text-gray-400 text-sm">{activeResult.error || 'Unknown error occurred'}</p>
                 </div>
               )}
             </div>

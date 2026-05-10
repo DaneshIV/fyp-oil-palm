@@ -1,0 +1,10 @@
+path: C:/Users/danes/fyp-oil-palm/ai_model/datasets/balanced_v4
+train: train/images
+val:   val/images
+test:  test/images
+nc: 4
+names:
+  0: healthy
+  1: ganoderma
+  2: unhealthy
+  3: immature

@@ -1,7 +1,15 @@
 import axios from 'axios'
 import Cookies from 'js-cookie'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+// Auto-detect: localhost when running locally, tunnel when accessed remotely
+const getApiUrl = () => {
+  if (typeof window === 'undefined') return 'http://localhost:8000'
+  return window.location.hostname === 'localhost'
+    ? 'http://localhost:8000'
+    : 'https://api.project2030.me'
+}
+
+const API_URL = getApiUrl()
 
 export const api = axios.create({
   baseURL: API_URL,
@@ -9,7 +17,6 @@ export const api = axios.create({
 })
 
 // ── JWT Interceptors ─────────────────────
-// Add token to every request
 api.interceptors.request.use((config) => {
   const token = Cookies.get('auth_token')
   if (token) {
@@ -18,7 +25,6 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Handle 401 — redirect to login
 api.interceptors.response.use(
   response => response,
   error => {
@@ -33,27 +39,27 @@ api.interceptors.response.use(
 
 // ── Sensor API ───────────────────────────
 export const sensorApi = {
-  getLatest: () => api.get('/sensors/latest'),
+  getLatest:  () => api.get('/sensors/latest'),
   getHistory: (hours = 24) => api.get(`/sensors/history?hours=${hours}`),
   create: (data: {
-    temperature: number
-    humidity: number
+    temperature:   number
+    humidity:      number
     soil_moisture: number
-    ec_level: number
+    ec_level:      number
   }) => api.post('/sensors/', data),
 }
 
 // ── Disease API ──────────────────────────
 export const diseaseApi = {
   getHistory: (limit = 20) => api.get(`/disease/history?limit=${limit}`),
-  getLatest: () => api.get('/disease/latest'),
+  getLatest:  () => api.get('/disease/latest'),
   create: (data: {
-    image_path: string
+    image_path:    string
     disease_label: string
-    confidence: number
-    severity: string
-    tree_id?: string
-    block_id?: string
+    confidence:    number
+    severity:      string
+    tree_id?:      string
+    block_id?:     string
   }) => api.post('/disease/', data),
 }
 
@@ -61,22 +67,22 @@ export const diseaseApi = {
 export const alertApi = {
   getAll: (unacknowledgedOnly = false) =>
     api.get(`/alerts/?unacknowledged_only=${unacknowledgedOnly}`),
-  getCount: () => api.get('/alerts/count'),
-  acknowledge: (id: number) => api.post(`/alerts/${id}/acknowledge`),
+  getCount:       () => api.get('/alerts/count'),
+  acknowledge:    (id: number) => api.post(`/alerts/${id}/acknowledge`),
   acknowledgeAll: () => api.post('/alerts/acknowledge-all'),
   create: (data: {
-    alert_type: string
-    message: string
+    alert_type:    string
+    message:       string
     sensor_value?: number
-    threshold?: number
+    threshold?:    number
   }) => api.post('/alerts/', data),
 }
 
 // ── Automation API ───────────────────────
 export const automationApi = {
-  getRules: () => api.get('/automation/rules'),
-  toggleRule: (id: number) => api.patch(`/automation/rules/${id}/toggle`),
-  deleteRule: (id: number) => api.delete(`/automation/rules/${id}`),
+  getRules:     () => api.get('/automation/rules'),
+  toggleRule:   (id: number) => api.patch(`/automation/rules/${id}/toggle`),
+  deleteRule:   (id: number) => api.delete(`/automation/rules/${id}`),
   controlRelay: (relay_pin: number, state: boolean) =>
     api.post('/automation/relay', { relay_pin, state }),
 }
