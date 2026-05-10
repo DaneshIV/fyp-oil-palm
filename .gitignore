@@ -62,3 +62,7 @@ ai_model/runs/
 Take the `CLAUDE.md` file you downloaded and copy it into:
 ```
 C:\Users\danes\fyp-oil-palm\CLAUDE.md
+yolov8m.pt
+yolov8n.pt
+export_v4.py
+export_v4n.py
