@@ -12,6 +12,8 @@
 **Type:** Final Year Project (FYP)
 **Hardware:** IRIV PiControl Industry 4.0 AgriBox v2 (Raspberry Pi CM4-based industrial controller by Cytron Malaysia)
 **GitHub:** https://github.com/DaneshIV/fyp-oil-palm
+**Demo Deadline:** 25 May 2026
+**IRIV Arrives:** ~12-13 May 2026 (Mon/Tue)
 
 ---
 
@@ -29,7 +31,7 @@
   - [x] Login — JWT authentication page
   - [x] Overview — live sensors, alerts, disease feed, WS Live indicator
   - [x] Sensors — real-time charts, safe zones, danger/warning banner
-  - [x] Disease AI — detection history, charts, confidence bars, disease info
+  - [x] Disease AI — detection history, bar/pie charts, confidence bars
   - [x] AI Test — upload image OR webcam → YOLOv8 inference live
   - [x] Security Monitor — Triple Layer Security with live camera
   - [x] Security Snapshots — gallery grid + lightbox + download ✅
@@ -44,10 +46,9 @@
   - [x] Cookies: auth_token (24h) + username
   - [x] Logout button in sidebar with username display
 - [x] API JWT Protection ✅
-  - [x] HTTP middleware in main.py
-  - [x] Public routes: /health, /, /auth/login, /docs
-  - [x] All other endpoints require Bearer token
-  - [x] WebSocket connections skip JWT check
+  - [x] HTTP middleware in main.py (not global Depends)
+  - [x] Public routes: /health, /, /auth/login, /docs, /favicon.ico
+  - [x] WebSocket skips JWT via scope type check
 - [x] PWA — Progressive Web App ✅
   - [x] Installable on Android + iOS
   - [x] manifest.json + icons generated
@@ -56,14 +57,28 @@
   - [x] /sensors/ws/sensors — pushes data every 3s
   - [x] /sensors/ws/alerts — pushes alert count every 5s
   - [x] WS Live badge on Overview page
-  - [x] Works via Cloudflare tunnel with originRequest config
-  - [x] Falls back to polling when WS unavailable
+  - [x] Works via Cloudflare tunnel
+- [x] Disease Detection History Charts ✅
+  - [x] Bar chart — last 7 days stacked healthy/diseased
+  - [x] Pie chart — class breakdown
+- [x] Sensor Safe Zone Alerts ✅
+  - [x] Red danger banner when any sensor exceeds danger threshold
+  - [x] Yellow warning banner when sensor in warning zone
+- [x] Block/Tree Map View ✅
+  - [x] Visual grid of trees per block, color coded by severity
+  - [x] Click tree for details panel
+  - [x] Block-A, Block-B, Block-C + Other/Test section
 - [x] AI Model v1 — YOLOv8n (mAP50 59.1% standardised)
 - [x] AI Model v2 — YOLOv8s comparison (mAP50 52.3% standardised)
-- [x] AI Model v3 — YOLOv8n FINAL (mAP50 71.5% standardised) ✅
-- [x] All 3 models evaluated on same test set
-- [x] Evaluation charts + confusion matrix generated
-- [x] V3 ONNX exported (best_v3.onnx)
+- [x] AI Model v3 — YOLOv8n (mAP50 71.5% standardised)
+- [x] AI Model v4m — YOLOv8m (mAP50 74.8% at epoch 23, crashed)
+- [x] AI Model v4n — YOLOv8n FINAL (mAP50 74.6%) ✅ PRODUCTION
+  - [x] Dataset: balanced_v2 + Ganoderma COCO = 8,881 images
+  - [x] Training time: 2.9 hours on RTX 3060
+  - [x] Exported to ONNX (best_v4.onnx, ~6MB)
+  - [x] Deployed to backend — /disease/detect using v4
+- [x] All models evaluated on same standardised test set
+- [x] V4n ONNX exported (best_v4.onnx)
 - [x] Triple Layer Security System ✅
   - [x] Layer 1 — PIR sensor / software motion detection
   - [x] Layer 2 — Camera snapshot capture
@@ -71,17 +86,7 @@
   - [x] Telegram alerts with photo + 30s cooldown
   - [x] Security event log in dashboard
   - [x] Security snapshots gallery page ✅
-- [x] Disease Detection History Chart ✅
-  - [x] Bar chart — last 7 days stacked healthy/diseased
-  - [x] Pie chart — class breakdown
-- [x] Sensor Safe Zone Alerts ✅
-  - [x] Red danger banner when sensor in danger zone
-  - [x] Yellow warning banner when sensor in warning zone
-- [x] Block/Tree Map View ✅
-  - [x] Visual grid of trees per block
-  - [x] Color coded by severity
-  - [x] Click tree for details panel
-  - [x] Block-A, Block-B, Block-C support
+- [x] Full system test — 34/34 tests passed (100%) ✅
 - [x] Git LFS for model weights
 - [x] 3x backups — GitHub, D drive, Google Drive
 - [x] Cloudflared tunnel — FULLY WORKING ✅
@@ -89,23 +94,18 @@
   - [x] Dashboard: https://app.project2030.me
   - [x] API: https://api.project2030.me
   - [x] Domain: project2030.me (Namecheap → Cloudflare)
-  - [x] WebSocket via tunnel — originRequest config
+  - [x] protocol: http2 in config (university WiFi fix)
 - [x] IRIV hardware scripts — all 6 complete + tested in simulation
 - [x] PSM2 FYP Report — ALL 6 CHAPTERS COMPLETE ✅
-  - [x] Chapter 1 — Introduction
-  - [x] Chapter 2 — Literature Review
-  - [x] Chapter 3 — Methodology
-  - [x] Chapter 4 — Requirement Analysis & Design
-  - [x] Chapter 5 — Implementation & Testing
-  - [x] Chapter 6 — Conclusion
-  - [x] All diagrams — Use Case, Sequence, Activity, Architecture, Class, ERD
-  - [x] Abstract, TOC, List of Figures, List of Tables, References
-  - [x] MySQL + Supabase screenshots for Section 4.4
 
 ### 🔲 Todo
-- [ ] Annotate Kaggle images in Label Studio → retrain v4
-- [ ] IRIV hardware arrives → deploy + test
+- [ ] IRIV hardware arrives → deploy + test (ETA Mon/Tue 12-13 May)
+- [ ] Connect real RS485 sensors on IRIV
+- [ ] Connect PIR + USB camera on IRIV
+- [ ] Set up systemd auto-start on IRIV
 - [ ] Full end-to-end field test
+- [ ] Demo rehearsal (May 21-22)
+- [ ] PSM2 report update — add V4 model results + IRIV deployment
 
 ---
 
@@ -115,8 +115,8 @@
 fyp-oil-palm/
 ├── CLAUDE.md
 ├── README.md
-├── pyrightconfig.json             ← Suppress Pylance RPi/hardware warnings
-├── .gitignore                     ← captured_images/ excluded
+├── pyrightconfig.json
+├── .gitignore                     ← captured_images/, yolov8*.pt excluded
 ├── .env                           ← Never commit!
 ├── start_fyp.ps1                  ← Start all services + Cloudflared
 ├── demo_data.py                   ← Insert demo sensor data
@@ -125,40 +125,58 @@ fyp-oil-palm/
 ├── add_diseases.py                ← Insert demo disease detections
 ├── add_block_data.py              ← Insert Block-A/B/C demo tree data
 ├── test_sensors.py                ← Test sensor danger/warning values
+├── test_system.py                 ← Full system test (34/34 pass)
+├── prepare_dataset_v4.py          ← COCO→YOLO convert + merge datasets
+├── export_v4n.py                  ← Export v4n ONNX
 │
 ├── ai_model/
 │   ├── data.yaml                  ← Points to balanced (v1 datasets)
-│   ├── data_v2.yaml               ← Points to balanced_v2 (v2 datasets) ✅
+│   ├── data_v2.yaml               ← Points to balanced_v2 (v2 datasets)
+│   ├── data_v4.yaml               ← Points to balanced_v4 (v4 dataset) ✅
 │   ├── datasets/
 │   │   ├── roboflow/              ← Original 3 datasets (v1)
 │   │   ├── roboflow_v2/           ← New 10 datasets (v2)
 │   │   ├── combined_v2/           ← Merged v2 (6,612 images)
-│   │   └── balanced_v2/           ← Balanced v2 — used for v3 training
-│   │       ├── train/ — healthy:4337, ganoderma:1803, unhealthy:2180, immature:1918
-│   │       ├── val/   — healthy:1031, ganoderma:306, unhealthy:464, immature:430
-│   │       └── test/  — healthy:535, ganoderma:167, unhealthy:239, immature:240
+│   │   ├── balanced_v2/           ← Balanced v2 — used for v3 training
+│   │   ├── ganoderma_yolo/        ← Converted Mendeley COCO→YOLO
+│   │   └── balanced_v4/           ← v4 dataset (8,881 images) ✅
+│   │       ├── train/ — 6,770 images
+│   │       ├── val/   — 1,399 images
+│   │       └── test/  — 712 images
 │   ├── models/
 │   │   ├── best.pt                ← YOLOv8n v1
-│   │   ├── best_v2_yolov8s.pt     ← YOLOv8s comparison
-│   │   ├── best_v3.pt             ← YOLOv8n v3 FINAL ✅ PRODUCTION
-│   │   └── best_v3.onnx           ← ONNX for IRIV ✅
+│   │   ├── best_v2_yolov8s.pt     ← YOLOv8s v2
+│   │   ├── best_v3.pt             ← YOLOv8n v3 71.5% mAP50
+│   │   ├── best_v3.onnx           ← V3 ONNX
+│   │   ├── best_v4m.pt            ← YOLOv8m v4m 74.8% (crashed ep26)
+│   │   ├── best_v4m.onnx          ← V4m ONNX (98.8MB — too big for IRIV)
+│   │   ├── best_v4.pt             ← YOLOv8n v4n 74.6% ✅ PRODUCTION
+│   │   └── best_v4.onnx           ← V4n ONNX (~6MB) ✅ FOR IRIV
 │   ├── runs/
-│   │   └── evaluation/            ← Confusion matrix + charts ✅
+│   │   ├── oil_palm_v1/           ← V1 training results
+│   │   ├── oil_palm_v2/           ← V2 training results
+│   │   ├── oil_palm_v3/           ← V3 training results
+│   │   ├── oil_palm_v4/           ← V4m training results (crashed ep26)
+│   │   ├── oil_palm_v4n/          ← V4n training results ✅
+│   │   └── evaluation/            ← Confusion matrix + charts
 │   └── training/
-│       ├── train.py
-│       ├── prepare_dataset.py
-│       ├── balance_dataset_v2.py
-│       ├── download_datasets.py
-│       └── evaluate.py            ← Evaluates all 3 models
+│       ├── train.py               ← V1/V2/V3 training script
+│       ├── prepare_dataset.py     ← Dataset merger v2
+│       ├── balance_dataset_v2.py  ← Dataset balancer v2
+│       ├── download_datasets.py   ← Roboflow bulk downloader
+│       ├── evaluate.py            ← Evaluate all models
+│       ├── train_v4.py            ← YOLOv8m v4 training (crashed OOM)
+│       ├── train_v4n.py           ← YOLOv8n v4 training ✅
+│       └── check_progress.py      ← Check training progress from CSV
 │
 ├── backend/
 │   ├── main.py                    ← FastAPI port 8000 + HTTP auth middleware
 │   ├── routes/
 │   │   ├── sensors.py             ✅ + WebSocket /ws/sensors + /ws/alerts
-│   │   ├── disease.py             ✅ /detect endpoint
+│   │   ├── disease.py             ✅ uses best_v4.pt
 │   │   ├── alerts.py              ✅
 │   │   ├── automation.py          ✅
-│   │   ├── security.py            ✅ Triple Layer + snapshots endpoints
+│   │   ├── security.py            ✅ Triple Layer + snapshots
 │   │   └── auth.py                ✅ JWT login/verify/logout
 │   ├── schemas/schemas.py         ✅
 │   └── database/
@@ -171,17 +189,17 @@ fyp-oil-palm/
 │   ├── next.config.ts             ← PWA + outputFileTracingRoot
 │   ├── .env.local                 ← NEXT_PUBLIC_API_URL
 │   ├── hooks/
-│   │   └── useWebSocket.ts        ← WebSocket hooks for sensors + alerts
+│   │   └── useWebSocket.ts        ← WebSocket hooks
 │   ├── lib/
-│   │   └── api.ts                 ← axios instance with JWT interceptors
+│   │   └── api.ts                 ← axios + JWT + auto URL detection
 │   ├── app/
-│   │   ├── login/page.tsx         ✅ JWT login page
+│   │   ├── login/page.tsx         ✅
 │   │   ├── page.tsx               ✅ Overview + WS Live badge
 │   │   ├── sensors/page.tsx       ✅ + danger/warning banner
-│   │   ├── disease/page.tsx       ✅ + history chart + pie chart
-│   │   ├── disease/detect/page.tsx ✅ Live webcam detection
-│   │   ├── security/page.tsx      ✅ Triple Layer Security Monitor
-│   │   ├── security/snapshots/page.tsx ✅ Blob auth image loading
+│   │   ├── disease/page.tsx       ✅ + bar/pie charts
+│   │   ├── disease/detect/page.tsx ✅ api.post() with JWT
+│   │   ├── security/page.tsx      ✅
+│   │   ├── security/snapshots/page.tsx ✅ blob auth
 │   │   ├── automation/page.tsx    ✅
 │   │   ├── reports/page.tsx       ✅
 │   │   └── map/page.tsx           ✅ Plantation Block Map
@@ -189,7 +207,7 @@ fyp-oil-palm/
 │   │   ├── manifest.json          ← PWA manifest
 │   │   └── icons/                 ← PWA icons 72-512px
 │   └── components/ui/
-│       ├── Sidebar.tsx            ✅ 10 nav items + logout button
+│       ├── Sidebar.tsx            ✅ 10 nav items + logout
 │       ├── SensorCard.tsx         ✅
 │       ├── Skeleton.tsx           ✅
 │       ├── LiveIndicator.tsx      ✅
@@ -243,12 +261,13 @@ fyp-oil-palm/
 | API URL | https://api.project2030.me |
 | Domain | project2030.me (Namecheap → Cloudflare) |
 | Config | C:\Users\danes\.cloudflared\config.yml |
-| Credentials | C:\Users\danes\.cloudflared\26d38b6a-5222-40a0-a0a4-489fcbbfd610.json |
 
 **Config file:**
 ```yaml
 tunnel: 26d38b6a-5222-40a0-a0a4-489fcbbfd610
 credentials-file: C:\Users\danes\.cloudflared\26d38b6a-5222-40a0-a0a4-489fcbbfd610.json
+
+protocol: http2
 
 ingress:
   - hostname: api.project2030.me
@@ -264,7 +283,8 @@ ingress:
   - service: http_status:404
 ```
 
-**Run tunnel:** `cloudflared tunnel run fyp-oil-palm`
+**Run:** `cloudflared tunnel run fyp-oil-palm`
+**Note:** University WiFi blocks UDP 7844 → shows "degraded" but still works. Use hotspot for "healthy" status.
 **Note:** Use `npm run build && npm start` NOT `npm run dev` with Cloudflared
 
 ---
@@ -278,10 +298,9 @@ Token storage:  Cookie (auth_token, 24h expiry)
 Middleware:     dashboard/proxy.ts — export function proxy()
 Logout:         Sidebar logout button clears cookies → redirects /login
 Fix:            window.location.href = '/' after login (NOT router.push)
-Backend:        backend/routes/auth.py
-API Auth:       HTTP middleware in main.py (not global dependency)
-Public routes:  /health, /, /auth/login, /docs, /openapi.json, /redoc
-WebSocket:      Skips JWT check automatically (scope type check)
+Backend:        backend/routes/auth.py + HTTP middleware in main.py
+Public routes:  /health, /, /auth/login, /docs, /openapi.json, /redoc, /favicon.ico
+WebSocket:      Skips JWT via scope type check in main.py
 ```
 
 ---
@@ -292,9 +311,6 @@ WebSocket:      Skips JWT check automatically (scope type check)
 Script:   iriv_scripts/daily_summary.py
 Schedule: Every day at midnight (00:00)
 Test:     python iriv_scripts/daily_summary.py --now
-Contents: Sensor averages, disease counts, alerts, relay activations
-Status:   ALL GOOD / MONITOR CLOSELY / NEEDS ATTENTION
-Library:  pip install schedule
 ```
 
 ---
@@ -313,7 +329,6 @@ Clear   → No action
 Cooldown:  30 seconds
 Snapshots: captured_images/security/ (gitignored)
 Gallery:   /security/snapshots — blob auth image loading
-Download:  Blob approach with JWT token
 ```
 
 ---
@@ -324,9 +339,9 @@ Download:  Blob approach with JWT token
 Page:       /map
 Data:       disease_detections table (block_id + tree_id fields)
 Colors:     Green=None, Blue=Low, Yellow=Medium, Red=High severity
-Blocks:     Block-A, Block-B, Block-C (auto/test go to Other section)
-Click:      Tree square → shows details panel on right
-RTSP use:   Camera 1 → Block-A, Camera 2 → Block-B
+Blocks:     Block-A, Block-B, Block-C (auto/test → Other section)
+Click:      Tree square → details panel on right
+RTSP:       Camera 1 → Block-A, Camera 2 → Block-B
 Demo data:  python add_block_data.py
 ```
 
@@ -335,11 +350,10 @@ Demo data:  python add_block_data.py
 ## 📊 Disease Charts
 
 ```
-Bar chart:  Last 7 days — stacked healthy vs diseased per day
+Bar chart:  Last 7 days — stacked healthy vs diseased
 Pie chart:  Class breakdown — healthy/ganoderma/unhealthy/immature
-Location:   /disease page — above detection list
-Updates:    Every 10 seconds
-Library:    Recharts (BarChart + PieChart)
+Location:   /disease page
+Library:    Recharts
 ```
 
 ---
@@ -348,8 +362,8 @@ Library:    Recharts (BarChart + PieChart)
 
 ```
 Location:   /sensors page — between header and sensor cards
-Danger:     Red banner — any sensor exceeds danger threshold
-Warning:    Yellow banner — any sensor exceeds warning threshold
+Danger:     Red banner
+Warning:    Yellow banner
 Thresholds:
   Temperature:   warning >32°C, danger >35°C
   Humidity:      warning <60%, danger <50%
@@ -365,11 +379,8 @@ Test:       python test_sensors.py
 ```
 Package:    @ducanh2912/next-pwa
 Manifest:   dashboard/public/manifest.json
-Icons:      dashboard/public/icons/ (72px to 512px)
-Install:    Android — Chrome menu → Add to Home Screen
-            iOS — Safari Share → Add to Home Screen
+Icons:      dashboard/public/icons/
 Theme:      #22c55e (green)
-Background: #030712 (dark)
 ```
 
 ---
@@ -378,32 +389,68 @@ Background: #030712 (dark)
 
 ```
 Endpoints:
-  ws://localhost:8000/sensors/ws/sensors  ← sensor data every 3s
-  ws://localhost:8000/sensors/ws/alerts   ← alert count every 5s
-
+  ws://localhost:8000/sensors/ws/sensors  ← every 3s
+  ws://localhost:8000/sensors/ws/alerts   ← every 5s
 Hook:       dashboard/hooks/useWebSocket.ts
-Badge:      WS Live (green pulsing) on Overview page
-Tunnel:     wss://api.project2030.me (works via Cloudflare)
-Fallback:   Polling every 5s when WS unavailable
-Auth:       WebSocket skips JWT (scope type check in main.py)
+Tunnel:     wss://api.project2030.me
+Auth:       WebSocket skips JWT (scope type check)
 ```
 
 ---
 
-## 🤖 AI Model — FINAL RESULTS
+## 🤖 AI Model — ALL VERSIONS
+
+| Model | Architecture | Dataset | Images | mAP50 | Status |
+|---|---|---|---|---|---|
+| V1 | YOLOv8n | 3 Roboflow | 5,725 | 59.1% | Baseline |
+| V2 | YOLOv8s | 3 Roboflow | 5,725 | 52.3% | Architecture test |
+| V3 | YOLOv8n | 10 Roboflow | 7,748 | 71.5% | Previous production |
+| V4m | YOLOv8m | 11 datasets | 8,881 | 74.8% | Crashed ep26, saved |
+| V4n | YOLOv8n | 11 datasets | 8,881 | **74.6%** | ✅ PRODUCTION |
+
+**Key findings:**
+```
+1. Dataset diversity > model size (V2 bigger but worse than V1)
+2. More diverse data = best improvement (V3 +12.4% over V1)
+3. V4n same arch as V3 but +1,133 ganoderma images = +3.1%
+4. YOLOv8m not worth it on RTX 3060 Laptop (OOM + too slow)
+```
+
+**V4n Class Breakdown:**
+```
+healthy:   98.6%  ✅ Excellent
+unhealthy: 99.5%  ✅ Excellent
+immature:  52.2%  ⚠️ Weak (not enough labeled data)
+ganoderma: 48.3%  ⚠️ Needs more close-up bracket fungus images
+```
+
+**Production model:** `best_v4.pt` / `best_v4.onnx` (~6MB, perfect for IRIV)
+**Security model:** `yolov8n.pt` (pretrained COCO, auto downloaded)
+**Inference:** conf=0.5, iou=0.45 (disease) | conf=0.25 (security)
+**Classes:** [healthy, ganoderma, unhealthy, immature]
+
+---
+
+## 🗄️ Dataset v4
 
 ```
-Production:  best_v3.pt / best_v3.onnx (YOLOv8n, 71.5% mAP50)
-Security:    yolov8n.pt (pretrained COCO, auto downloaded)
-Classes:     [healthy, ganoderma, unhealthy, immature]
-Inference:   conf=0.5, iou=0.45 (disease) | conf=0.25 (security)
+Source:    balanced_v2 (7,748) + Mendeley Ganoderma COCO (1,133)
+Total:     8,881 images
+Train:     6,770 (5,783 v2 + 987 ganoderma)
+Val:       1,399 (1,295 v2 + 104 ganoderma)
+Test:        712 (  670 v2 +  42 ganoderma)
+YAML:      ai_model/data_v4.yaml
+Converter: prepare_dataset_v4.py (COCO→YOLO)
 ```
 
-| Model | Architecture | Images | mAP50 | Status |
-|---|---|---|---|---|
-| V1 | YOLOv8n | 5,725 | 59.1% | Baseline |
-| V2 | YOLOv8s | 5,725 | 52.3% | Architecture test |
-| V3 | YOLOv8n | 7,748 | **71.5%** | ✅ PRODUCTION |
+**Training on Windows:**
+```python
+# MUST use if __name__ == '__main__' for multiprocessing on Windows
+# workers=4 works with multiprocessing.set_start_method("spawn")
+# workers=0 always safe but slow
+# batch=16 for YOLOv8n on RTX 3060 6GB
+# cache=True needs 11.6GB RAM — may fall back to no cache if RAM low
+```
 
 ---
 
@@ -424,12 +471,12 @@ Inference:   conf=0.5, iou=0.45 (disease) | conf=0.25 (security)
 GET  /sensors/latest
 GET  /sensors/history?hours=24
 POST /sensors/
-WS   /sensors/ws/sensors          ← WebSocket live sensor push
-WS   /sensors/ws/alerts           ← WebSocket live alert count
+WS   /sensors/ws/sensors
+WS   /sensors/ws/alerts
 GET  /disease/history?limit=20
 GET  /disease/latest
 POST /disease/
-POST /disease/detect              ← YOLOv8 disease inference
+POST /disease/detect              ← YOLOv8n v4 inference
 GET  /alerts/
 GET  /alerts/count
 POST /alerts/{id}/acknowledge
@@ -439,7 +486,7 @@ POST /automation/rules
 PATCH /automation/rules/{id}/toggle
 DELETE /automation/rules/{id}
 POST /automation/relay
-POST /security/detect             ← YOLOv8n COCO security inference
+POST /security/detect
 GET  /security/events
 GET  /security/events/count
 GET  /security/snapshots
@@ -450,7 +497,6 @@ GET  /auth/verify
 POST /auth/logout
 POST /sync
 GET  /health                      ← PUBLIC
-GET  /                            ← PUBLIC
 ```
 
 ---
@@ -474,6 +520,13 @@ automation_rules:   id, rule_name, trigger_type, sensor_field, threshold_value, 
 | URL (remote) | https://app.project2030.me |
 | Production | npm run build then npm start |
 | .env.local | NEXT_PUBLIC_API_URL=https://api.project2030.me |
+| Pages | 10 total |
+
+**lib/api.ts auto-detects URL:**
+```
+localhost:3000  → calls http://localhost:8000
+app.project2030.me → calls https://api.project2030.me
+```
 
 **All 10 pages:**
 ```
@@ -481,7 +534,7 @@ automation_rules:   id, rule_name, trigger_type, sensor_field, threshold_value, 
 /                    → Overview + WS Live badge
 /sensors             → Charts + danger/warning banner
 /disease             → Detection history + bar/pie charts
-/disease/detect      → Live webcam + upload detection
+/disease/detect      → Live webcam + upload (JWT via api.post)
 /security            → Triple Layer Security monitor
 /security/snapshots  → Gallery + blob auth + download
 /automation          → Relay controls + rules
@@ -496,7 +549,6 @@ automation_rules:   id, rule_name, trigger_type, sensor_field, threshold_value, 
 ```
 Test:     python iriv_scripts/telegram_bot.py
 Daily:    python iriv_scripts/daily_summary.py --now
-Alerts:   sensor, disease, relay, security + photo
 ```
 
 ---
@@ -512,16 +564,6 @@ Sync:   Auto every 60s
 
 ---
 
-## 💾 Backups
-
-| Location | Status |
-|---|---|
-| GitHub | ✅ Code + model weights (Git LFS) |
-| D: drive | ✅ Full project |
-| Google Drive | ✅ Full project |
-
----
-
 ## 🛠️ Local Dev
 
 ```powershell
@@ -529,18 +571,18 @@ cd C:\Users\danes\fyp-oil-palm
 fyp_env\Scripts\activate
 .\start_fyp.ps1
 
-# Local:  http://localhost:3000
-# Remote: https://app.project2030.me
-# Docs:   https://api.project2030.me/docs
+# Local:  http://localhost:3000 / http://localhost:8000/docs
+# Remote: https://app.project2030.me / https://api.project2030.me
 
 # Demo scripts
-python demo_data.py          # sensor data
-python live_sensors.py       # continuous live sensors
-python add_alerts.py         # demo alerts
-python add_diseases.py       # demo disease detections
+python demo_data.py
+python live_sensors.py
+python add_alerts.py
+python add_diseases.py
 python add_block_data.py     # Block-A/B/C tree data
-python test_sensors.py       # test danger/warning banners
-python iriv_scripts/daily_summary.py --now  # test Telegram summary
+python test_sensors.py       # Test danger/warning banners
+python test_system.py        # Full system test (34 tests)
+python iriv_scripts/daily_summary.py --now
 
 # Git push on uni WiFi
 git config --global http.sslVerify false
@@ -552,7 +594,8 @@ git config --global http.sslVerify true
 
 ## 📝 PSM2 Report — 100% COMPLETE ✅
 
-All 6 chapters + diagrams + abstract + TOC + references + MySQL/Supabase screenshots
+All 6 chapters + diagrams + abstract + TOC + references + screenshots
+**TODO:** Update Chapter 5 with V4 model results + IRIV deployment after hardware arrives
 
 ---
 
@@ -567,7 +610,7 @@ All 6 chapters + diagrams + abstract + TOC + references + MySQL/Supabase screens
 4.  Copy project files via SCP
 5.  Set up MySQL + run init.sql
 6.  Copy .env with credentials
-7.  Copy best_v3.onnx → ai_model/models/best.onnx
+7.  Copy best_v4.onnx → ai_model/models/best.onnx  ← V4 not V3!
 8.  Connect PIR sensor to GPIO 24
 9.  Install cloudflared on IRIV (Linux)
 10. Copy ~/.cloudflared/ credentials to IRIV
@@ -591,7 +634,7 @@ All 6 chapters + diagrams + abstract + TOC + references + MySQL/Supabase screens
 1. Never use Node-RED — custom Next.js only
 2. Never use Grafana — charts in Next.js
 3. Backend is FastAPI only
-4. IRIV uses ONNX — best_v3.onnx NOT .pt
+4. IRIV uses ONNX — best_v4.onnx NOT best_v3.onnx NOT .pt
 5. Database is MySQL NOT SQLite/PostgreSQL
 6. RS485 port is /dev/ttyS0 on IRIV
 7. ADS1115 I2C is 0x48
@@ -604,29 +647,37 @@ All 6 chapters + diagrams + abstract + TOC + references + MySQL/Supabase screens
 14. Security inference: conf=0.25 (COCO model)
 15. Disease classes: [healthy, ganoderma, unhealthy, immature]
 16. IRIV scripts use ON_IRIV = sys.platform == 'linux'
-17. PRODUCTION model is V3 — best_v3.pt / best_v3.onnx
+17. PRODUCTION model is V4n — best_v4.pt / best_v4.onnx
 18. Supabase RLS enabled — use service role key
 19. Git push on uni WiFi: disable sslVerify, push, re-enable
 20. npm run dev conflicts with Cloudflared — use build+start
-21. Cloudflared tunnel: cloudflared tunnel run fyp-oil-palm
-22. Domain: project2030.me — app.project2030.me / api.project2030.me
-23. Tunnel ID: 26d38b6a-5222-40a0-a0a4-489fcbbfd610
-24. NEXT_PUBLIC_API_URL=https://api.project2030.me for production
-25. proxy.ts export must be named proxy not middleware
-26. Login fix: window.location.href = '/' not router.push
-27. JWT users: admin/fyp2024, danesh/oilpalm2024
-28. Security cooldown: 30 seconds
-29. PIR GPIO pin: 24
-30. OBS Virtual Camera: index 1 on dev laptop
-31. Daily summary test: python iriv_scripts/daily_summary.py --now
-32. captured_images/ is gitignored — do not commit images
-33. Dashboard has 10 pages including login, snapshots, map
-34. Snapshots use blob loading with JWT — not direct img src
-35. WebSocket skips JWT via scope type check in main.py
-36. API auth uses HTTP middleware not global Depends
-37. PWA uses @ducanh2912/next-pwa package
-38. Block map at /map — block_id format: Block-A, Block-B, Block-C
-39. RTSP Camera 1 = Block-A, Camera 2 = Block-B convention
-40. lib/api.ts exports api (axios with JWT interceptors)
-41. Security snapshots images need blob fetch — use api.get(url, {responseType: blob})
-42. PSM2 report 100% complete
+21. Cloudflared: protocol: http2 in config.yml
+22. Cloudflared tunnel: cloudflared tunnel run fyp-oil-palm
+23. Domain: project2030.me — app.project2030.me / api.project2030.me
+24. Tunnel ID: 26d38b6a-5222-40a0-a0a4-489fcbbfd610
+25. NEXT_PUBLIC_API_URL=https://api.project2030.me in .env.local
+26. proxy.ts export must be named proxy not middleware
+27. Login fix: window.location.href = '/' not router.push
+28. JWT users: admin/fyp2024, danesh/oilpalm2024
+29. Security cooldown: 30 seconds
+30. PIR GPIO pin: 24
+31. OBS Virtual Camera: index 1 on dev laptop
+32. Daily summary test: python iriv_scripts/daily_summary.py --now
+33. captured_images/ is gitignored — do not commit images
+34. yolov8m.pt and yolov8n.pt are gitignored — auto downloaded
+35. Dashboard has 10 pages including login, snapshots, map
+36. Snapshots use blob loading with JWT — not direct img src
+37. WebSocket skips JWT via scope type check in main.py
+38. API auth uses HTTP middleware not global Depends
+39. PWA uses @ducanh2912/next-pwa package
+40. Block map at /map — block_id format: Block-A, Block-B, Block-C
+41. lib/api.ts auto-detects URL: localhost→8000, else→api.project2030.me
+42. detect/page.tsx uses api.post() not fetch() for JWT auth
+43. System test: python test_system.py → 34/34 tests
+44. V4n training: workers=4 + if __name__==__main__ + batch=16
+45. Windows training: multiprocessing.set_start_method("spawn") needed
+46. Dataset v4: balanced_v2 + Mendeley Ganoderma COCO = 8,881 images
+47. data_v4.yaml points to balanced_v4 dataset
+48. best_v4.onnx is ~6MB — correct size for IRIV deployment
+49. Demo deadline: 25 May 2026
+50. IRIV arrives: ~12-13 May 2026
