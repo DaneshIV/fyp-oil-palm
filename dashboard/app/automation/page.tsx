@@ -1,399 +1,372 @@
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react'
-import { automationApi } from '@/lib/api'
+import React, { useState } from "react";
 import {
-  RefreshCw,
-  Settings,
+  Power,
   Zap,
   Droplets,
-  Thermometer,
   FlaskConical,
-  Lightbulb,
+  Clock,
+  Activity,
+  CircleDot,
   ToggleLeft,
   ToggleRight,
-  Trash2,
-  Plus,
-} from 'lucide-react'
-import { format } from 'date-fns'
+} from "lucide-react";
 
-interface AutomationRule {
-  id: number
-  rule_name: string
-  trigger_type: string
-  sensor_field: string
-  threshold_value: number
-  operator: string
-  relay_pin: number
-  is_active: boolean
-  last_triggered: string | null
-  created_at: string
+interface Relay {
+  id: string;
+  port: string;
+  label: string;
+  voltage: string;
+  current: string;
+  icon: React.ReactNode;
 }
 
-const RELAY_ICONS: Record<number, { icon: any; label: string; color: string }> = {
-  1: { icon: Droplets,    label: 'Irrigation Pump',  color: 'text-teal-400'   },
-  2: { icon: Thermometer, label: 'Mist Cooling',     color: 'text-orange-400' },
-  3: { icon: FlaskConical,label: 'Fertilizer Pump',  color: 'text-purple-400' },
-  4: { icon: Lightbulb,   label: 'Grow Lighting',    color: 'text-yellow-400' },
+interface Rule {
+  id: string;
+  condition: string;
+  action: string;
+  status: "ARMED" | "DISARMED" | "TRIGGERED";
+  lastFired: string;
+  priority: "HIGH" | "MED" | "LOW";
 }
 
-const SENSOR_LABELS: Record<string, string> = {
-  soil_moisture: 'Soil Moisture',
-  temperature:   'Temperature',
-  humidity:      'Humidity',
-  ec_level:      'EC Level',
-}
+// ============================================================================
+// MOCK DATA — INTEGRATION POINT
+// Replace RELAYS with live relay state from FastAPI backend.
+// Future: useEffect → fetch('/api/relays') or
+//         WebSocket subscription to ws://<host>/ws/relays for real-time state.
+// ============================================================================
+const RELAYS: Relay[] = [
+  { id: "RELAY_01", port: "AC_SOCKET_1", label: "Water Pump", voltage: "238.1V", current: "4.2A", icon: <Droplets className="w-4 h-4" /> },
+  { id: "RELAY_02", port: "AC_SOCKET_2", label: "Mist Pump", voltage: "236.7V", current: "1.8A", icon: <Droplets className="w-4 h-4" /> },
+  { id: "RELAY_03", port: "DC_PORT_A", label: "NPK-A", voltage: "12.4V", current: "1.1A", icon: <FlaskConical className="w-4 h-4" /> },
+  { id: "RELAY_04", port: "DC_PORT_B", label: "NPK-B", voltage: "12.2V", current: "0.9A", icon: <FlaskConical className="w-4 h-4" /> },
+  { id: "RELAY_05", port: "DC_PORT_C", label: "NPK-C", voltage: "12.6V", current: "1.3A", icon: <FlaskConical className="w-4 h-4" /> },
+];
 
-const SENSOR_UNITS: Record<string, string> = {
-  soil_moisture: '%',
-  temperature:   '°C',
-  humidity:      '%',
-  ec_level:      'mS/cm',
-}
+// ============================================================================
+// MOCK DATA — INTEGRATION POINT
+// Replace RULES with live automation rules from FastAPI backend.
+// Future: useEffect → fetch('/api/automation/rules') for initial load,
+//         POST /api/automation/rules/:id/toggle for arming/disarming.
+// ============================================================================
+const RULES: Rule[] = [
+  {
+    id: "RULE_001",
+    condition: "IF soil_moisture < 40% AND time_window(06:00-18:00)",
+    action: "ENGAGE RELAY_01 FOR 300s",
+    status: "ARMED",
+    lastFired: "2026-05-30T14:32:11Z",
+    priority: "HIGH",
+  },
+  {
+    id: "RULE_002",
+    condition: "IF ambient_temp > 35°C AND humidity < 60%",
+    action: "ENGAGE RELAY_02 CYCLE(60s ON / 120s OFF)",
+    status: "TRIGGERED",
+    lastFired: "2026-05-30T15:01:44Z",
+    priority: "HIGH",
+  },
+  {
+    id: "RULE_003",
+    condition: "IF ec_reading < 1.2mS/cm AND days_since_dose > 3",
+    action: "ENGAGE RELAY_03, RELAY_04, RELAY_05 SEQ(45s EACH)",
+    status: "ARMED",
+    lastFired: "2026-05-28T08:15:00Z",
+    priority: "MED",
+  },
+  {
+    id: "RULE_004",
+    condition: "IF rain_sensor == TRUE",
+    action: "DISENGAGE RELAY_01, RELAY_02 IMMEDIATE",
+    status: "ARMED",
+    lastFired: "2026-05-27T21:44:33Z",
+    priority: "HIGH",
+  },
+  {
+    id: "RULE_005",
+    condition: "IF voltage_dc < 11.0V ON ANY DC_PORT",
+    action: "ALERT + DISENGAGE ALL DC_RELAYS",
+    status: "DISARMED",
+    lastFired: "—",
+    priority: "LOW",
+  },
+];
 
-export default function AutomationPage() {
-  const [rules, setRules] = useState<AutomationRule[]>([])
-  const [loading, setLoading] = useState(true)
-  const [relayStates, setRelayStates] = useState<Record<number, boolean>>({})
-  const [toggling, setToggling] = useState<number | null>(null)
-  const [showAddForm, setShowAddForm] = useState(false)
-  const [newRule, setNewRule] = useState({
-    rule_name: '',
-    trigger_type: 'threshold',
-    sensor_field: 'soil_moisture',
-    threshold_value: 40,
-    operator: '<',
-    relay_pin: 1,
-    is_active: true,
-  })
+export default function AutomationPanel() {
+  // ============================================================================
+  // MOCK DATA — INTEGRATION POINT
+  // Replace activeRelays initial state with live data from FastAPI backend.
+  // Future: useEffect → fetch('/api/relays/state') for initial load,
+  //         POST /api/relays/:id/toggle for toggling,
+  //         WebSocket subscription to ws://<host>/ws/relays for real-time updates.
+  // ============================================================================
+  const [activeRelays, setActiveRelays] = useState<Record<string, boolean>>({
+    RELAY_01: true,
+    RELAY_02: false,
+    RELAY_03: true,
+    RELAY_04: false,
+    RELAY_05: true,
+  });
 
-  const fetchRules = async () => {
-    try {
-      const res = await automationApi.getRules()
-      setRules(res.data)
-    } catch (err) {
-      console.error('Failed to fetch rules:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
+  // ============================================================================
+  // MOCK DATA — INTEGRATION POINT
+  // Replace ruleToggles initial state with live data from FastAPI backend.
+  // Future: useEffect → fetch('/api/automation/rules') for initial load,
+  //         POST /api/automation/rules/:id/toggle for arming/disarming.
+  // ============================================================================
+  const [ruleToggles, setRuleToggles] = useState<Record<string, boolean>>({
+    RULE_001: true,
+    RULE_002: true,
+    RULE_003: true,
+    RULE_004: true,
+    RULE_005: false,
+  });
 
-  useEffect(() => {
-    fetchRules()
-  }, [])
+  const toggleRelay = (id: string) => {
+    setActiveRelays((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
-  const handleToggleRule = async (id: number) => {
-    setToggling(id)
-    try {
-      await automationApi.toggleRule(id)
-      setRules(prev =>
-        prev.map(r => r.id === id ? { ...r, is_active: !r.is_active } : r)
-      )
-    } catch (err) {
-      console.error('Failed to toggle rule:', err)
-    } finally {
-      setToggling(null)
-    }
-  }
+  const toggleRule = (id: string) => {
+    setRuleToggles((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
-  const handleDeleteRule = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this rule?')) return
-    try {
-      await automationApi.deleteRule(id)
-      setRules(prev => prev.filter(r => r.id !== id))
-    } catch (err) {
-      console.error('Failed to delete rule:', err)
-    }
-  }
+  const statusColor = (s: Rule["status"]) =>
+    s === "ARMED"
+      ? "text-emerald-400"
+      : s === "TRIGGERED"
+        ? "text-amber-500"
+        : "text-zinc-600";
 
-  const handleRelayControl = async (pin: number, state: boolean) => {
-    try {
-      await automationApi.controlRelay(pin, state)
-      setRelayStates(prev => ({ ...prev, [pin]: state }))
-    } catch (err) {
-      console.error('Failed to control relay:', err)
-    }
-  }
-
-  const handleAddRule = async () => {
-    try {
-      await automationApi.getRules() // placeholder — we'll add POST later
-      setShowAddForm(false)
-      fetchRules()
-    } catch (err) {
-      console.error('Failed to add rule:', err)
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-gray-400 flex items-center gap-3">
-          <RefreshCw size={20} className="animate-spin" />
-          Loading automation...
-        </div>
-      </div>
-    )
-  }
+  const priorityColor = (p: Rule["priority"]) =>
+    p === "HIGH"
+      ? "text-rose-500"
+      : p === "MED"
+        ? "text-amber-500"
+        : "text-zinc-500";
 
   return (
-    <div className="space-y-6">
-
+    <div className="min-h-screen bg-zinc-950 p-6 text-zinc-300 font-mono">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-            <Settings size={24} className="text-teal-400" />
-            Automation
-          </h1>
-          <p className="text-gray-400 text-sm mt-1">
-            Control relays and manage automation rules
-          </p>
-        </div>
+      <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="flex items-center gap-2 px-4 py-2 bg-green-500/10 border border-green-500/30 text-green-400 rounded-lg text-sm hover:bg-green-500/20 transition-colors"
-          >
-            <Plus size={16} />
-            Add Rule
-          </button>
-          <button
-            onClick={fetchRules}
-            className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors"
-          >
-            <RefreshCw size={16} className="text-gray-400" />
-          </button>
+          <Power className="w-5 h-5 text-emerald-400" />
+          <div>
+            <h1 className="text-sm font-bold tracking-widest uppercase text-zinc-100">
+              Relay Control Matrix
+            </h1>
+            <p className="text-[10px] uppercase tracking-widest text-zinc-500 mt-0.5">
+              IRIV_AGRIBOX_01 // HW_REV 3.2 // 5-CH RELAY MODULE
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <CircleDot className="w-3 h-3 text-emerald-400 animate-pulse" />
+          <span className="text-[10px] uppercase tracking-widest text-emerald-400">
+            LINK_ACTIVE
+          </span>
         </div>
       </div>
 
-      {/* Manual Relay Controls */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-        <h2 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
-          <Zap size={16} className="text-yellow-400" />
-          Manual Relay Control
-        </h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map(pin => {
-            const relay = RELAY_ICONS[pin]
-            const Icon = relay.icon
-            const isOn = relayStates[pin] || false
-            return (
-              <div
-                key={pin}
-                className={`rounded-xl border p-4 transition-colors ${
-                  isOn
-                    ? 'border-green-500/40 bg-green-500/10'
-                    : 'border-gray-700 bg-gray-800'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <Icon size={20} className={isOn ? 'text-green-400' : relay.color} />
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    isOn
-                      ? 'bg-green-500/20 text-green-400'
-                      : 'bg-gray-700 text-gray-400'
-                  }`}>
-                    {isOn ? 'ON' : 'OFF'}
-                  </span>
-                </div>
-                <div className="text-sm text-gray-300 mb-1">{relay.label}</div>
-                <div className="text-xs text-gray-500 mb-3">Relay Pin {pin}</div>
-                <div className="flex gap-2">
-                  <button
-  onClick={() => handleRelayControl(pin, true)}
-  className="flex-1 py-1.5 rounded-lg text-xs font-medium bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors"
->
-  ON
-</button>
-<button
-  onClick={() => handleRelayControl(pin, false)}
-  className="flex-1 py-1.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
->
-  OFF
-</button>
+      {/* Relay Grid */}
+      <div className="grid grid-cols-5 gap-3 mb-8">
+        {RELAYS.map((relay) => {
+          const active = activeRelays[relay.id];
+          return (
+            <div
+              key={relay.id}
+              className={`
+                relative bg-zinc-900 rounded-lg p-4
+                border transition-all duration-500
+                ${
+                  active
+                    ? "border-emerald-500/60 shadow-[0_0_15px_rgba(16,185,129,0.15)]"
+                    : "border-zinc-800"
+                }
+              `}
+            >
+              {/* Machined-metal top edge */}
+              <div className="absolute inset-x-0 top-0 h-px bg-white/5 rounded-t-lg" />
+
+              {/* Glow bar */}
+              {active && (
+                <div className="absolute inset-x-0 top-0 h-0.5 bg-emerald-400 rounded-t-lg animate-pulse" />
+              )}
+
+              {/* ID & Port */}
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[10px] uppercase tracking-widest text-zinc-500">
+                  {relay.id}
+                </span>
+                <div
+                  className={`p-1.5 rounded-md ${active ? "bg-emerald-400/10 text-emerald-400 animate-pulse" : "bg-zinc-800 text-zinc-600"}`}
+                >
+                  {relay.icon}
                 </div>
               </div>
-            )
-          })}
-        </div>
-      </div>
 
-      {/* Add Rule Form */}
-      {showAddForm && (
-        <div className="bg-gray-900 border border-green-500/30 rounded-xl p-5">
-          <h2 className="text-sm font-semibold text-green-400 mb-4 flex items-center gap-2">
-            <Plus size={16} />
-            New Automation Rule
-          </h2>
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-            <div>
-              <label className="text-xs text-gray-400 mb-1 block">Rule Name</label>
-              <input
-                type="text"
-                value={newRule.rule_name}
-                onChange={e => setNewRule({ ...newRule, rule_name: e.target.value })}
-                placeholder="e.g. Night Irrigation"
-                className="w-full bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-gray-400 mb-1 block">Sensor</label>
-              <select
-                value={newRule.sensor_field}
-                onChange={e => setNewRule({ ...newRule, sensor_field: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
-              >
-                <option value="soil_moisture">Soil Moisture</option>
-                <option value="temperature">Temperature</option>
-                <option value="humidity">Humidity</option>
-                <option value="ec_level">EC Level</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-gray-400 mb-1 block">Operator</label>
-              <select
-                value={newRule.operator}
-                onChange={e => setNewRule({ ...newRule, operator: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
-              >
-                <option value="<">Less than (&lt;)</option>
-                <option value=">">Greater than (&gt;)</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-gray-400 mb-1 block">
-                Threshold ({SENSOR_UNITS[newRule.sensor_field]})
-              </label>
-              <input
-                type="number"
-                value={newRule.threshold_value}
-                onChange={e => setNewRule({ ...newRule, threshold_value: Number(e.target.value) })}
-                className="w-full bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-gray-400 mb-1 block">Relay Pin</label>
-              <select
-                value={newRule.relay_pin}
-                onChange={e => setNewRule({ ...newRule, relay_pin: Number(e.target.value) })}
-                className="w-full bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-green-500"
-              >
-                <option value={1}>Pin 1 — Irrigation</option>
-                <option value={2}>Pin 2 — Mist Cooling</option>
-                <option value={3}>Pin 3 — Fertilizer</option>
-                <option value={4}>Pin 4 — Lighting</option>
-              </select>
-            </div>
-          </div>
-          <div className="flex gap-3 mt-4">
-            <button
-              onClick={handleAddRule}
-              className="px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors"
-            >
-              Save Rule
-            </button>
-            <button
-              onClick={() => setShowAddForm(false)}
-              className="px-4 py-2 bg-gray-800 text-gray-400 rounded-lg text-sm hover:bg-gray-700 transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+              <p className="text-[10px] uppercase tracking-widest text-zinc-600 mb-1">
+                {relay.port}
+              </p>
+              <p className="text-xs text-zinc-300 font-medium mb-4">
+                {relay.label}
+              </p>
 
-      {/* Automation Rules */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-        <h2 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
-          <Settings size={16} className="text-teal-400" />
-          Automation Rules
-          <span className="ml-auto text-xs text-gray-500">{rules.length} rules</span>
-        </h2>
-
-        <div className="space-y-3">
-          {rules.length === 0 ? (
-            <p className="text-gray-500 text-sm text-center py-8">
-              No automation rules yet — add one above
-            </p>
-          ) : (
-            rules.map(rule => {
-              const relay = RELAY_ICONS[rule.relay_pin]
-              const Icon = relay?.icon || Zap
-              return (
-                <div
-                  key={rule.id}
-                  className={`flex items-center gap-4 p-4 rounded-xl border transition-colors ${
-                    rule.is_active
-                      ? 'border-teal-500/20 bg-teal-500/5'
-                      : 'border-gray-800 bg-gray-800/50 opacity-60'
-                  }`}
-                >
-                  {/* Icon */}
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                    rule.is_active ? 'bg-teal-500/20' : 'bg-gray-700'
-                  }`}>
-                    <Icon size={18} className={rule.is_active ? 'text-teal-400' : 'text-gray-500'} />
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-medium text-white">{rule.rule_name}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        rule.is_active
-                          ? 'bg-teal-500/20 text-teal-400'
-                          : 'bg-gray-700 text-gray-500'
-                      }`}>
-                        {rule.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      Trigger: {SENSOR_LABELS[rule.sensor_field] || rule.sensor_field}{' '}
-                      {rule.operator}{' '}
-                      {rule.threshold_value}
-                      {SENSOR_UNITS[rule.sensor_field]}
-                      {' → '}
-                      Relay Pin {rule.relay_pin} ({relay?.label || 'Unknown'})
-                    </div>
-                    {rule.last_triggered && (
-                      <div className="text-xs text-gray-600 mt-0.5">
-                        Last triggered: {format(new Date(rule.last_triggered), 'dd MMM HH:mm')}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <button
-                      onClick={() => handleToggleRule(rule.id)}
-                      disabled={toggling === rule.id}
-                      className="text-gray-400 hover:text-white transition-colors"
-                      title={rule.is_active ? 'Deactivate' : 'Activate'}
-                    >
-                      {toggling === rule.id ? (
-                        <RefreshCw size={20} className="animate-spin" />
-                      ) : rule.is_active ? (
-                        <ToggleRight size={24} className="text-teal-400" />
-                      ) : (
-                        <ToggleLeft size={24} className="text-gray-500" />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => handleDeleteRule(rule.id)}
-                      className="text-gray-600 hover:text-red-400 transition-colors"
-                      title="Delete rule"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
+              {/* Telemetry */}
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <div className="bg-zinc-950 rounded px-2 py-1.5 border border-zinc-800">
+                  <p className="text-[9px] uppercase tracking-widest text-zinc-600 mb-0.5">
+                    V_OUT
+                  </p>
+                  <p
+                    className={`text-sm font-mono font-bold ${active ? "text-emerald-400" : "text-zinc-600"}`}
+                  >
+                    {active ? relay.voltage : "0.0V"}
+                  </p>
                 </div>
-              )
-            })
-          )}
-        </div>
+                <div className="bg-zinc-950 rounded px-2 py-1.5 border border-zinc-800">
+                  <p className="text-[9px] uppercase tracking-widest text-zinc-600 mb-0.5">
+                    I_DRAW
+                  </p>
+                  <p
+                    className={`text-sm font-mono font-bold ${active ? "text-amber-500" : "text-zinc-600"}`}
+                  >
+                    {active ? relay.current : "0.0A"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Toggle */}
+              <button
+                onClick={() => toggleRelay(relay.id)}
+                className={`
+                  w-full flex items-center justify-center gap-2 py-2 rounded-md
+                  text-[10px] uppercase tracking-widest font-bold
+                  border transition-all duration-300 cursor-pointer
+                  ${
+                    active
+                      ? "bg-emerald-400/10 border-emerald-500/40 text-emerald-400 hover:bg-emerald-400/20"
+                      : "bg-zinc-800/50 border-zinc-700 text-zinc-500 hover:bg-zinc-800"
+                  }
+                `}
+              >
+                {active ? (
+                  <ToggleRight className="w-4 h-4" />
+                ) : (
+                  <ToggleLeft className="w-4 h-4" />
+                )}
+                {active ? "ENGAGED" : "STANDBY"}
+              </button>
+            </div>
+          );
+        })}
       </div>
 
+      {/* Active Rules Table */}
+      <div className="bg-zinc-900 rounded-lg border border-zinc-800 relative overflow-hidden">
+        <div className="absolute inset-x-0 top-0 h-px bg-white/5" />
+
+        <div className="flex items-center gap-3 px-5 py-3 border-b border-zinc-800">
+          <Activity className="w-4 h-4 text-amber-500" />
+          <h2 className="text-[11px] uppercase tracking-widest font-bold text-zinc-300">
+            Active_Rules
+          </h2>
+          <span className="text-[10px] uppercase tracking-widest text-zinc-600 ml-auto">
+            {RULES.filter((_, i) => ruleToggles[`RULE_00${i + 1}`]).length} /{" "}
+            {RULES.length} ARMED
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-zinc-800/50">
+                {["ID", "CONDITION", "ACTION", "PRI", "STATUS", "LAST_FIRED", ""].map(
+                  (h) => (
+                    <th
+                      key={h}
+                      className="px-4 py-2.5 text-[9px] uppercase tracking-widest text-zinc-600 font-medium"
+                    >
+                      {h}
+                    </th>
+                  )
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {RULES.map((rule) => {
+                const enabled = ruleToggles[rule.id];
+                return (
+                  <tr
+                    key={rule.id}
+                    className={`border-b border-zinc-800/30 transition-colors ${enabled ? "hover:bg-zinc-800/30" : "opacity-40"}`}
+                  >
+                    <td className="px-4 py-3 text-[11px] font-mono text-zinc-400 font-bold">
+                      {rule.id}
+                    </td>
+                    <td className="px-4 py-3 text-[11px] font-mono text-zinc-400 max-w-xs">
+                      {rule.condition}
+                    </td>
+                    <td className="px-4 py-3 text-[11px] font-mono text-emerald-400/80">
+                      {rule.action}
+                    </td>
+                    <td className={`px-4 py-3 text-[10px] font-bold uppercase tracking-widest ${priorityColor(rule.priority)}`}>
+                      {rule.priority}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold ${statusColor(rule.status)}`}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            rule.status === "ARMED"
+                              ? "bg-emerald-400"
+                              : rule.status === "TRIGGERED"
+                                ? "bg-amber-500 animate-pulse"
+                                : "bg-zinc-600"
+                          }`}
+                        />
+                        {rule.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-[10px] font-mono text-zinc-600">
+                      {rule.lastFired === "—"
+                        ? "—"
+                        : new Date(rule.lastFired).toLocaleString("en-GB", {
+                            day: "2-digit",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                          })}
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => toggleRule(rule.id)}
+                        className="cursor-pointer"
+                      >
+                        {enabled ? (
+                          <ToggleRight className="w-5 h-5 text-emerald-400" />
+                        ) : (
+                          <ToggleLeft className="w-5 h-5 text-zinc-600" />
+                        )}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex items-center gap-2 px-5 py-2.5 border-t border-zinc-800 bg-zinc-950/50">
+          <Clock className="w-3 h-3 text-zinc-600" />
+          <span className="text-[9px] uppercase tracking-widest text-zinc-600">
+            Rule engine cycle: 250ms // Last eval: 2026-05-30T15:05:22Z
+          </span>
+        </div>
+      </div>
     </div>
-  )
+  );
 }

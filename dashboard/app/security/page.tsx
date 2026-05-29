@@ -1,610 +1,654 @@
-'use client'
+"use client";
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef } from "react";
 import {
-  Shield, Camera, Radio, AlertTriangle,
-  CheckCircle, RefreshCw, Eye, User,
-  Bird, HelpCircle, ShieldAlert, ShieldCheck
-} from 'lucide-react'
-import { api as axios } from '@/lib/api'
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+  Camera,
+  CircleDot,
+  Lock,
+  Unlock,
+  Wifi,
+  Fingerprint,
+  Eye,
+  AlertTriangle,
+  ChevronRight,
+  Radio,
+  Crosshair,
+} from "lucide-react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+interface SecurityLayer {
+  id: string;
+  label: string;
+  subsystem: string;
+  status: "ACTIVE" | "STANDBY" | "ALERT";
+  icon: React.ReactNode;
+  checks: { name: string; ok: boolean }[];
+}
 
 interface SecurityEvent {
-  id: number
-  alert_type: string
-  message: string
-  sensor_value: number
-  acknowledged: boolean
-  triggered_at: string
+  id: string;
+  timestamp: string;
+  type: "Person" | "Animal" | "Unknown" | "System" | "Perimeter";
+  severity: "critical" | "warning" | "info";
+  message: string;
+  zone: string;
 }
 
-interface SecurityCount {
-  total: number
-  person: number
-  animal: number
-  unknown: number
-  unacknowledged: number
-}
-
-interface Detection {
-  class_name: string
-  confidence: number
-}
-
-interface LiveResult {
-  success: boolean
-  threat_type: string
-  threat_level: string
-  best_detection: Detection
-  all_detections: Detection[]
-  total_detections: number
-  error?: string
-}
-
-const THREAT_STYLES: Record<string, { bg: string; border: string; text: string; badge: string }> = {
-  security_person: {
-    bg:    'bg-red-500/10',
-    border: 'border-red-500/30',
-    text:  'text-red-400',
-    badge: 'bg-red-500/20 text-red-400 border border-red-500/30',
+// ============================================================================
+// MOCK DATA — INTEGRATION POINT
+// Replace SECURITY_LAYERS with live security subsystem state from FastAPI.
+// Future: useEffect → fetch('/api/security/layers') for initial load,
+//         WebSocket subscription to ws://<host>/ws/security for real-time status.
+// ============================================================================
+const SECURITY_LAYERS: SecurityLayer[] = [
+  {
+    id: "LAYER_01",
+    label: "Perimeter Fence",
+    subsystem: "PIR_ARRAY + TRIP_WIRE",
+    status: "ACTIVE",
+    icon: <Radio className="w-4 h-4" />,
+    checks: [
+      { name: "PIR_NORTH", ok: true },
+      { name: "PIR_SOUTH", ok: true },
+      { name: "PIR_EAST", ok: true },
+      { name: "PIR_WEST", ok: false },
+      { name: "TRIP_MAIN", ok: true },
+      { name: "TRIP_AUX", ok: true },
+    ],
   },
-  security_animal: {
-    bg:    'bg-orange-500/10',
-    border: 'border-orange-500/30',
-    text:  'text-orange-400',
-    badge: 'bg-orange-500/20 text-orange-400 border border-orange-500/30',
+  {
+    id: "LAYER_02",
+    label: "Camera Network",
+    subsystem: "4× IP_CAM + NVR",
+    status: "ALERT",
+    icon: <Camera className="w-4 h-4" />,
+    checks: [
+      { name: "CAM_01_GATE", ok: true },
+      { name: "CAM_02_FIELD", ok: true },
+      { name: "CAM_03_STORE", ok: false },
+      { name: "CAM_04_ROAD", ok: true },
+      { name: "NVR_RECORD", ok: true },
+      { name: "NVR_STORAGE", ok: true },
+    ],
   },
-  security_unknown: {
-    bg:    'bg-gray-500/10',
-    border: 'border-gray-500/30',
-    text:  'text-gray-400',
-    badge: 'bg-gray-500/20 text-gray-400 border border-gray-500/30',
+  {
+    id: "LAYER_03",
+    label: "AI Threat Detection",
+    subsystem: "YOLOv8 + TRACKING",
+    status: "ACTIVE",
+    icon: <Eye className="w-4 h-4" />,
+    checks: [
+      { name: "MODEL_LOADED", ok: true },
+      { name: "INFERENCE_OK", ok: true },
+      { name: "TRACK_ENGINE", ok: true },
+      { name: "ALERT_PIPE", ok: true },
+      { name: "MQTT_LINK", ok: true },
+      { name: "LOG_WRITER", ok: true },
+    ],
   },
-}
+];
 
-const THREAT_ICONS: Record<string, React.ReactNode> = {
-  security_person:  <User size={14} />,
-  security_animal:  <Bird size={14} />,
-  security_unknown: <HelpCircle size={14} />,
-}
+// ============================================================================
+// MOCK DATA — INTEGRATION POINT
+// Replace INITIAL_EVENTS with live security event log from FastAPI backend.
+// Future: useEffect → fetch('/api/security/events?limit=10') for initial load,
+//         WebSocket subscription to ws://<host>/ws/security/events for new events.
+// ============================================================================
+const INITIAL_EVENTS: SecurityEvent[] = [
+  { id: "EVT_0042", timestamp: "15:04:33", type: "Person", severity: "critical", message: "HUMAN_DETECTED Gate entrance // CONF 94.2%", zone: "ZONE_A" },
+  { id: "EVT_0041", timestamp: "15:03:18", type: "Animal", severity: "warning", message: "ANIMAL_DETECTED Field perimeter // CLASS: primate // CONF 87.1%", zone: "ZONE_B" },
+  { id: "EVT_0040", timestamp: "15:01:55", type: "System", severity: "info", message: "CAM_03 RECONNECTED after 12s dropout // STREAM_OK", zone: "SYS" },
+  { id: "EVT_0039", timestamp: "14:58:22", type: "Unknown", severity: "warning", message: "UNCLASSIFIED_MOTION North fence // SIZE: large // CONF 62.4%", zone: "ZONE_A" },
+  { id: "EVT_0038", timestamp: "14:55:44", type: "Perimeter", severity: "info", message: "PIR_WEST sensor sweep completed // NO_INTRUSION", zone: "ZONE_D" },
+  { id: "EVT_0037", timestamp: "14:52:11", type: "Animal", severity: "warning", message: "ANIMAL_DETECTED Road approach // CLASS: canine // CONF 91.3%", zone: "ZONE_C" },
+  { id: "EVT_0036", timestamp: "14:48:39", type: "System", severity: "info", message: "NVR STORAGE_CHECK 847GB / 2TB // 42.4% USED", zone: "SYS" },
+  { id: "EVT_0035", timestamp: "14:45:02", type: "Person", severity: "critical", message: "HUMAN_DETECTED Store vicinity // CONF 88.9% // ALERT_SENT", zone: "ZONE_C" },
+  { id: "EVT_0034", timestamp: "14:42:18", type: "Perimeter", severity: "info", message: "TRIP_WIRE_CHECK all segments nominal // RESISTANCE OK", zone: "ALL" },
+  { id: "EVT_0033", timestamp: "14:38:55", type: "System", severity: "info", message: "AI MODEL ganoderma_sec_v2.pt WARM_RESTART // INFER_OK", zone: "SYS" },
+];
 
-const THREAT_LABELS: Record<string, string> = {
-  security_person:  'PERSON',
-  security_animal:  'ANIMAL',
-  security_unknown: 'UNKNOWN',
-}
+// ============================================================================
+// MOCK DATA — INTEGRATION POINT
+// Replace ROLLING_EVENTS with live rolling event stream from FastAPI backend.
+// Future: WebSocket subscription to ws://<host>/ws/security/events for new events.
+// ============================================================================
+const ROLLING_EVENTS: SecurityEvent[] = [
+  { id: "EVT_0043", timestamp: "15:05:12", type: "Animal", severity: "warning", message: "ANIMAL_DETECTED East fence // CLASS: bovine // CONF 83.7%", zone: "ZONE_B" },
+  { id: "EVT_0044", timestamp: "15:06:01", type: "Person", severity: "critical", message: "HUMAN_DETECTED Road approach // CONF 91.8% // TRACKING", zone: "ZONE_C" },
+  { id: "EVT_0045", timestamp: "15:06:44", type: "System", severity: "info", message: "PIR_ARRAY sweep cycle #4421 // ALL_CLEAR", zone: "ALL" },
+  { id: "EVT_0046", timestamp: "15:07:22", type: "Unknown", severity: "warning", message: "SHADOW_ANOMALY detected CAM_02 // INVESTIGATING", zone: "ZONE_B" },
+  { id: "EVT_0047", timestamp: "15:08:05", type: "Perimeter", severity: "info", message: "VIBRATION_SENSOR gate post // AMPLITUDE: LOW // WIND", zone: "ZONE_A" },
+  { id: "EVT_0048", timestamp: "15:09:33", type: "Person", severity: "critical", message: "HUMAN_DETECTED Field interior // CONF 96.1% // ALARM_READY", zone: "ZONE_B" },
+];
 
-const LEVEL_STYLES: Record<string, string> = {
-  HIGH:   'text-red-400 bg-red-500/10 border-red-500/30',
-  MEDIUM: 'text-orange-400 bg-orange-500/10 border-orange-500/30',
-  LOW:    'text-gray-400 bg-gray-500/10 border-gray-500/30',
-  NONE:   'text-green-400 bg-green-500/10 border-green-500/30',
-}
-
-export default function SecurityPage() {
-  const [events, setEvents]               = useState<SecurityEvent[]>([])
-  const [counts, setCounts]               = useState<SecurityCount | null>(null)
-  const [loading, setLoading]             = useState(true)
-  const [streaming, setStreaming]         = useState(false)
-  const [liveMode, setLiveMode]           = useState(false)
-  const [liveResult, setLiveResult]       = useState<LiveResult | null>(null)
-  const [frameCount, setFrameCount]       = useState(0)
-  const [testLoading, setTestLoading]     = useState(false)
-  const [cameras, setCameras]             = useState<MediaDeviceInfo[]>([])
-  const [selectedCamera, setSelectedCamera] = useState<string>('')
-
-  const videoRef        = useRef<HTMLVideoElement>(null)
-  const canvasRef       = useRef<HTMLCanvasElement>(null)
-  const streamRef       = useRef<MediaStream | null>(null)
-  const liveIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  const frameCountRef   = useRef(0)
-
-  // ── Load cameras ─────────────────────────────────────────
-  const loadCameras = useCallback(async () => {
-    try {
-      const devices     = await navigator.mediaDevices.enumerateDevices()
-      const videoDevices = devices.filter(d => d.kind === 'videoinput')
-      setCameras(videoDevices)
-      const obs = videoDevices.find(d =>
-        d.label.toLowerCase().includes('obs') ||
-        d.label.toLowerCase().includes('virtual')
-      )
-      setSelectedCamera(obs?.deviceId || videoDevices[0]?.deviceId || '')
-    } catch (err) {
-      console.error('Failed to enumerate cameras:', err)
-    }
-  }, [])
+export default function SecurityMonitor() {
+  const [armed, setArmed] = useState(true);
+  // ============================================================================
+  // MOCK DATA — INTEGRATION POINT
+  // Replace events initial state with live data from FastAPI backend.
+  // Future: useEffect → fetch('/api/security/events') for initial load,
+  //         WebSocket subscription to ws://<host>/ws/security/events for streaming.
+  // ============================================================================
+  const [events, setEvents] = useState<SecurityEvent[]>(INITIAL_EVENTS);
+  const [trackX, setTrackX] = useState(45);
+  const [trackY, setTrackY] = useState(38);
+  const evtRef = useRef<HTMLDivElement>(null);
+  const rollingRef = useRef(0);
 
   useEffect(() => {
-    loadCameras()
-  }, [loadCameras])
+    const interval = setInterval(() => {
+      const idx = rollingRef.current % ROLLING_EVENTS.length;
+      const evt = ROLLING_EVENTS[idx];
+      const newEvt = {
+        ...evt,
+        id: `EVT_${1043 + rollingRef.current}`,
+        timestamp: new Date().toLocaleTimeString("en-GB", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        }),
+      };
+      setEvents((prev) => [newEvt, ...prev.slice(0, 19)]);
+      rollingRef.current++;
+    }, 4000);
 
-  // ── Fetch security data ──────────────────────────────────
-  const fetchData = useCallback(async () => {
-    try {
-      const [eventsRes, countsRes] = await Promise.all([
-        axios.get(`${API_URL}/security/events?limit=20`),
-        axios.get(`${API_URL}/security/events/count`),
-      ])
-      setEvents(eventsRes.data)
-      setCounts(countsRes.data)
-    } catch (err) {
-      console.error('Failed to fetch security data:', err)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
-    fetchData()
-    const interval = setInterval(fetchData, 5000)
-    return () => clearInterval(interval)
-  }, [fetchData])
+    const moveInterval = setInterval(() => {
+      setTrackX((prev) => {
+        const next = prev + (Math.random() - 0.5) * 8;
+        return Math.max(15, Math.min(85, next));
+      });
+      setTrackY((prev) => {
+        const next = prev + (Math.random() - 0.5) * 6;
+        return Math.max(15, Math.min(85, next));
+      });
+    }, 2000);
 
-  // ── Webcam ───────────────────────────────────────────────
-  const startWebcam = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: selectedCamera
-          ? { deviceId: { exact: selectedCamera } }
-          : true,
-      })
-      streamRef.current = stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        videoRef.current.play()
-      }
-      setStreaming(true)
-    } catch {
-      alert('Cannot access webcam — check browser permissions')
+    return () => clearInterval(moveInterval);
+  }, []);
+
+  const statusColor = (s: SecurityLayer["status"]) =>
+    s === "ACTIVE"
+      ? "text-emerald-400"
+      : s === "ALERT"
+        ? "text-amber-500"
+        : "text-zinc-500";
+
+  const statusDot = (s: SecurityLayer["status"]) =>
+    s === "ACTIVE"
+      ? "bg-emerald-400"
+      : s === "ALERT"
+        ? "bg-amber-500 animate-pulse"
+        : "bg-zinc-600";
+
+  const eventColor = (severity: SecurityEvent["severity"]) =>
+    severity === "critical"
+      ? "text-rose-500"
+      : severity === "warning"
+        ? "text-amber-500"
+        : "text-zinc-500";
+
+  const eventDot = (severity: SecurityEvent["severity"]) =>
+    severity === "critical"
+      ? "bg-rose-500 animate-pulse"
+      : severity === "warning"
+        ? "bg-amber-500"
+        : "bg-zinc-600";
+
+  const typeIcon = (type: SecurityEvent["type"]) => {
+    switch (type) {
+      case "Person":
+        return "👤";
+      case "Animal":
+        return "🐾";
+      case "Unknown":
+        return "❓";
+      case "System":
+        return "⚙";
+      case "Perimeter":
+        return "◎";
     }
-  }
-
-  const stopWebcam = () => {
-    stopLiveMode()
-    streamRef.current?.getTracks().forEach(t => t.stop())
-    setStreaming(false)
-    setLiveResult(null)
-  }
-
-  // ── Live Detection ───────────────────────────────────────
-  const runDetection = async (file: File): Promise<LiveResult | null> => {
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-      const res = await fetch(`${API_URL}/security/detect`, {
-        method: 'POST',
-        body:   formData,
-      })
-      return await res.json()
-    } catch {
-      return null
-    }
-  }
-
-  const startLiveMode = () => {
-    setLiveMode(true)
-    frameCountRef.current = 0
-
-    liveIntervalRef.current = setInterval(async () => {
-      if (!videoRef.current || !canvasRef.current) return
-      const canvas  = canvasRef.current
-      const video   = videoRef.current
-      canvas.width  = video.videoWidth
-      canvas.height = video.videoHeight
-      canvas.getContext('2d')?.drawImage(video, 0, 0)
-
-      canvas.toBlob(async blob => {
-        if (!blob) return
-        const file   = new File([blob], 'security_frame.jpg', { type: 'image/jpeg' })
-        const result = await runDetection(file)
-        if (result?.success) {
-          setLiveResult(result)
-          frameCountRef.current += 1
-          setFrameCount(frameCountRef.current)
-        }
-      }, 'image/jpeg', 0.85)
-    }, 1500)
-  }
-
-  const stopLiveMode = () => {
-    setLiveMode(false)
-    setLiveResult(null)
-    setFrameCount(0)
-    frameCountRef.current = 0
-    if (liveIntervalRef.current) clearInterval(liveIntervalRef.current)
-  }
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      stopWebcam()
-    }
-  }, [])
-
-  // ── Test Alert ───────────────────────────────────────────
-  const insertTestAlert = async () => {
-    setTestLoading(true)
-    try {
-      await axios.post(`${API_URL}/security/test-alert`)
-      await fetchData()
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setTestLoading(false)
-    }
-  }
-
-  // ── Acknowledge ──────────────────────────────────────────
-  const acknowledgeEvent = async (id: number) => {
-    try {
-      await axios.post(`${API_URL}/alerts/${id}/acknowledge`)
-      await fetchData()
-    } catch (err) {
-      console.error(err)
-    }
-  }
-
-  // ── Helpers ──────────────────────────────────────────────
-  const formatTime = (ts: string) =>
-    new Date(ts).toLocaleString('en-MY', {
-      day:    '2-digit',
-      month:  'short',
-      hour:   '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    })
-
-  const getLiveOverlayStyle = (result: LiveResult) => {
-    if (result.threat_type === 'person')  return 'border-red-500/70'
-    if (result.threat_type === 'animal')  return 'border-orange-500/70'
-    return 'border-green-500/70'
-  }
-
-  const getLiveTextStyle = (result: LiveResult) => {
-    if (result.threat_type === 'person')  return 'text-red-400'
-    if (result.threat_type === 'animal')  return 'text-orange-400'
-    return 'text-green-400'
-  }
-
-  const getLiveBarColor = (result: LiveResult) => {
-    if (result.threat_type === 'person')  return '#f87171'
-    if (result.threat_type === 'animal')  return '#fb923c'
-    return '#4ade80'
-  }
-
-  const getLiveLabel = (result: LiveResult) => {
-    if (result.threat_type === 'person')  return '🚨 PERSON DETECTED'
-    if (result.threat_type === 'animal')  return `⚠️ ${result.best_detection.class_name.toUpperCase()} DETECTED`
-    return '✅ AREA CLEAR'
-  }
+  };
 
   return (
-    <div className="space-y-6">
-
+    <div className="min-h-screen bg-zinc-950 p-6 text-zinc-300 font-mono">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-            <Shield size={24} className="text-blue-400" />
-            Security Monitor
-          </h1>
-          <p className="text-gray-400 text-sm mt-1">
-            Triple Layer Security — PIR + Camera + YOLOv8n AI Detection
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={insertTestAlert}
-            disabled={testLoading}
-            className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
-          >
-            {testLoading
-              ? <RefreshCw size={14} className="animate-spin" />
-              : <ShieldAlert size={14} />}
-            Test Alert
-          </button>
-          <button
-            onClick={fetchData}
-            className="p-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
-          >
-            <RefreshCw size={14} className="text-gray-400" />
-          </button>
-        </div>
-      </div>
-
-      {/* Stats Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        {[
-          { label: 'Total Events',      value: counts?.total          ?? 0, icon: <Shield size={18} />,        color: 'text-blue-400'   },
-          { label: 'Person Detected',   value: counts?.person         ?? 0, icon: <User size={18} />,          color: 'text-red-400'    },
-          { label: 'Animal Detected',   value: counts?.animal         ?? 0, icon: <Bird size={18} />,          color: 'text-orange-400' },
-          { label: 'Unknown',           value: counts?.unknown        ?? 0, icon: <HelpCircle size={18} />,    color: 'text-gray-400'   },
-          {
-            label: 'Unacknowledged',
-            value: counts?.unacknowledged ?? 0,
-            icon:  <AlertTriangle size={18} />,
-            color: counts?.unacknowledged ? 'text-yellow-400' : 'text-green-400'
-          },
-        ].map((stat, i) => (
-          <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <div className={`${stat.color} mb-2`}>{stat.icon}</div>
-            <div className="text-2xl font-bold text-white">{stat.value}</div>
-            <div className="text-xs text-gray-400 mt-1">{stat.label}</div>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <Shield className="w-5 h-5 text-sky-400" />
+          <div>
+            <h1 className="text-sm font-bold tracking-widest uppercase text-zinc-100">
+              Security Command Center
+            </h1>
+            <p className="text-[10px] uppercase tracking-widest text-zinc-500 mt-0.5">
+              IRIV_AGRIBOX_01 // TRIPLE LAYER DEFENSE MATRIX // 24/7 MONITORING
+            </p>
           </div>
-        ))}
-      </div>
+        </div>
 
-      {/* Triple Layer Indicator */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-        <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-          <Shield size={14} className="text-blue-400" />
-          Triple Layer Security Architecture
-        </h3>
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            {
-              layer: 'Layer 1',
-              name:  'PIR Sensor',
-              desc:  'Hardware Motion Detection',
-              icon:  <Radio size={16} />,
-              color: 'text-green-400',
-              bg:    'bg-green-500/10 border-green-500/30',
-            },
-            {
-              layer: 'Layer 2',
-              name:  'Camera',
-              desc:  'Snapshot Capture',
-              icon:  <Camera size={16} />,
-              color: 'text-blue-400',
-              bg:    'bg-blue-500/10 border-blue-500/30',
-            },
-            {
-              layer: 'Layer 3',
-              name:  'YOLOv8n AI',
-              desc:  'Threat Classification',
-              icon:  <Eye size={16} />,
-              color: 'text-purple-400',
-              bg:    'bg-purple-500/10 border-purple-500/30',
-            },
-          ].map((l, i) => (
-            <div key={i} className={`rounded-lg border p-3 ${l.bg}`}>
-              <div className={`${l.color} mb-1 flex items-center gap-2`}>
-                {l.icon}
-                <span className="text-xs font-semibold">{l.layer}</span>
-              </div>
-              <div className="text-white text-sm font-bold">{l.name}</div>
-              <div className="text-gray-400 text-xs mt-0.5">{l.desc}</div>
-            </div>
-          ))}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-md px-3 py-1.5">
+            <Wifi className="w-3 h-3 text-emerald-400" />
+            <span className="text-[10px] uppercase tracking-widest text-zinc-500">
+              4/4 CAMS ONLINE
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <CircleDot
+              className={`w-3 h-3 ${armed ? "text-emerald-400 animate-pulse" : "text-zinc-600"}`}
+            />
+            <span
+              className={`text-[10px] uppercase tracking-widest font-bold ${armed ? "text-emerald-400" : "text-zinc-600"}`}
+            >
+              {armed ? "ARMED" : "DISARMED"}
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Triple Layer Security Cards */}
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        {SECURITY_LAYERS.map((layer) => {
+          const okCount = layer.checks.filter((c) => c.ok).length;
+          const totalCount = layer.checks.length;
+          const allOk = okCount === totalCount;
 
-        {/* Left — Live Camera */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-            <Camera size={14} className="text-blue-400" />
-            Live Security Camera
-          </h3>
+          return (
+            <div
+              key={layer.id}
+              className={`bg-zinc-900 rounded-lg border relative overflow-hidden ${
+                layer.status === "ALERT"
+                  ? "border-amber-500/30"
+                  : "border-zinc-800"
+              }`}
+            >
+              <div className="absolute inset-x-0 top-0 h-px bg-white/5" />
 
-          {/* Live badge */}
-          {liveMode && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-lg">
-              <Radio size={14} className="text-red-400 animate-pulse" />
-              <span className="text-red-400 text-xs font-semibold">
-                LIVE SECURITY MONITORING ACTIVE
-              </span>
-              <span className="text-gray-500 text-xs ml-auto">
-                {frameCount} frames analysed
-              </span>
-            </div>
-          )}
+              {layer.status === "ALERT" && (
+                <div className="absolute inset-x-0 top-0 h-0.5 bg-amber-500 animate-pulse" />
+              )}
 
-          {/* Video feed */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden relative">
-            <video
-              ref={videoRef}
-              className="w-full rounded-xl"
-              style={{ display: streaming ? 'block' : 'none' }}
-              autoPlay
-              muted
-              playsInline
-            />
-
-            {/* Live AI overlay */}
-            {liveMode && liveResult?.success && (
-              <div className="absolute top-3 left-3 right-3">
-                <div className={`rounded-lg px-3 py-2 backdrop-blur-sm bg-black/70 border ${getLiveOverlayStyle(liveResult)}`}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className={`text-sm font-bold ${getLiveTextStyle(liveResult)}`}>
-                      {getLiveLabel(liveResult)}
-                    </span>
-                    <span className="text-white text-sm font-bold">
-                      {liveResult.best_detection.confidence}%
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-700 rounded-full h-1.5">
+              <div className="px-4 py-3 border-b border-zinc-800/50">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
                     <div
-                      className="h-1.5 rounded-full transition-all duration-300"
-                      style={{
-                        width:      `${liveResult.best_detection.confidence}%`,
-                        background: getLiveBarColor(liveResult),
-                      }}
-                    />
-                  </div>
-                  {liveResult.all_detections.length > 1 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {liveResult.all_detections.slice(0, 4).map((d, i) => (
-                        <span key={i} className="text-xs px-1.5 py-0.5 bg-black/40 rounded text-gray-300">
-                          {d.class_name} {d.confidence}%
-                        </span>
-                      ))}
+                      className={`p-1.5 rounded-md ${
+                        layer.status === "ACTIVE"
+                          ? "bg-emerald-400/10 text-emerald-400"
+                          : layer.status === "ALERT"
+                            ? "bg-amber-500/10 text-amber-500"
+                            : "bg-zinc-800 text-zinc-500"
+                      }`}
+                    >
+                      {layer.icon}
                     </div>
-                  )}
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold">
+                        {layer.label}
+                      </p>
+                      <p className="text-[9px] uppercase tracking-widest text-zinc-600">
+                        {layer.id} // {layer.subsystem}
+                      </p>
+                    </div>
+                  </div>
+                  <span
+                    className={`inline-flex items-center gap-1.5 text-[9px] uppercase tracking-widest font-bold ${statusColor(layer.status)}`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${statusDot(layer.status)}`} />
+                    {layer.status}
+                  </span>
                 </div>
               </div>
-            )}
 
-            {/* Threat level badge bottom right */}
-            {liveMode && liveResult?.success && liveResult.threat_level !== 'NONE' && (
-              <div className="absolute bottom-3 right-3">
-                <span className={`text-xs px-2 py-1 rounded-full border font-bold ${LEVEL_STYLES[liveResult.threat_level]}`}>
-                  {liveResult.threat_level} THREAT
-                </span>
-              </div>
-            )}
-
-            {!streaming && (
-              <div className="h-52 flex flex-col items-center justify-center gap-3">
-                <Camera size={40} className="text-gray-600" />
-                <p className="text-gray-500 text-sm">Camera offline</p>
-                <p className="text-gray-600 text-xs">Select camera and click Start</p>
-              </div>
-            )}
-          </div>
-
-          <canvas ref={canvasRef} className="hidden" />
-
-          {/* Camera selector */}
-          {!streaming && cameras.length > 1 && (
-            <select
-              value={selectedCamera}
-              onChange={e => setSelectedCamera(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300"
-            >
-              {cameras.map((cam, i) => (
-                <option key={cam.deviceId} value={cam.deviceId}>
-                  {cam.label || `Camera ${i + 1}`}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {/* Controls */}
-          {!streaming ? (
-            <button
-              onClick={startWebcam}
-              className="w-full py-2.5 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg text-sm font-semibold hover:bg-blue-500/30 transition-colors flex items-center justify-center gap-2"
-            >
-              <Camera size={16} />
-              Start Security Camera
-            </button>
-          ) : (
-            <div className="space-y-2">
-              {!liveMode ? (
-                <button
-                  onClick={startLiveMode}
-                  className="w-full py-2.5 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg text-sm font-semibold hover:bg-red-500/30 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Radio size={16} />
-                  🛡️ Arm — Start Live Detection
-                </button>
-              ) : (
-                <button
-                  onClick={stopLiveMode}
-                  className="w-full py-2.5 bg-red-500 text-white rounded-lg text-sm font-semibold hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Radio size={16} className="animate-pulse" />
-                  Disarm — Stop Live Detection
-                </button>
-              )}
-              <button
-                onClick={stopWebcam}
-                className="w-full py-2 bg-gray-800 text-gray-400 rounded-lg text-sm hover:bg-gray-700 transition-colors"
-              >
-                Stop Camera
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Right — Event Log */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-            <ShieldAlert size={14} className="text-blue-400" />
-            Security Event Log
-            {counts?.unacknowledged ? (
-              <span className="ml-auto text-xs px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded-full border border-yellow-500/30">
-                {counts.unacknowledged} new
-              </span>
-            ) : (
-              <span className="ml-auto text-xs px-2 py-0.5 bg-green-500/20 text-green-400 rounded-full border border-green-500/30">
-                All clear
-              </span>
-            )}
-          </h3>
-
-          <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
-            {loading ? (
-              [...Array(4)].map((_, i) => (
-                <div key={i} className="h-16 bg-gray-800 rounded-xl animate-pulse" />
-              ))
-            ) : events.length === 0 ? (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
-                <ShieldCheck size={36} className="text-green-400 mx-auto mb-3" />
-                <p className="text-green-400 font-semibold">No Security Events</p>
-                <p className="text-gray-500 text-xs mt-1">System armed and monitoring</p>
-                <button
-                  onClick={insertTestAlert}
-                  className="mt-3 text-xs text-gray-500 hover:text-gray-300 underline transition-colors"
-                >
-                  Insert test alert
-                </button>
-              </div>
-            ) : (
-              events.map(event => {
-                const style = THREAT_STYLES[event.alert_type] || THREAT_STYLES.security_unknown
-                const icon  = THREAT_ICONS[event.alert_type] || <HelpCircle size={14} />
-                const label = THREAT_LABELS[event.alert_type] || 'UNKNOWN'
-                return (
+              {/* Check matrix */}
+              <div className="grid grid-cols-3 gap-1 px-3 py-3">
+                {layer.checks.map((check) => (
                   <div
-                    key={event.id}
-                    className={`rounded-xl border p-3 transition-opacity ${style.bg} ${style.border} ${
-                      event.acknowledged ? 'opacity-40' : ''
+                    key={check.name}
+                    className={`flex items-center gap-1.5 px-2 py-1.5 rounded border ${
+                      check.ok
+                        ? "bg-zinc-950 border-zinc-800"
+                        : "bg-rose-500/5 border-rose-500/20"
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${style.badge}`}>
-                            {icon}
-                            {label}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {event.sensor_value?.toFixed(1)}% conf
-                          </span>
-                          {event.acknowledged && (
-                            <span className="text-xs text-gray-600">✓ ack</span>
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-300 line-clamp-2">
-                          {event.message}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {formatTime(event.triggered_at)}
-                        </p>
-                      </div>
-                      {!event.acknowledged && (
-                        <button
-                          onClick={() => acknowledgeEvent(event.id)}
-                          title="Acknowledge"
-                          className="shrink-0 p-1.5 bg-gray-800 hover:bg-green-500/20 rounded-lg transition-colors group"
-                        >
-                          <CheckCircle size={14} className="text-gray-500 group-hover:text-green-400 transition-colors" />
-                        </button>
-                      )}
-                    </div>
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        check.ok ? "bg-emerald-400" : "bg-rose-500 animate-pulse"
+                      }`}
+                    />
+                    <span
+                      className={`text-[8px] uppercase tracking-widest ${
+                        check.ok ? "text-zinc-500" : "text-rose-500"
+                      }`}
+                    >
+                      {check.name}
+                    </span>
                   </div>
-                )
-              })
-            )}
+                ))}
+              </div>
+
+              <div className="px-4 py-2 border-t border-zinc-800/50 bg-zinc-950/30 flex items-center justify-between">
+                <span className="text-[9px] uppercase tracking-widest text-zinc-600">
+                  INTEGRITY
+                </span>
+                <span
+                  className={`text-[10px] font-mono font-bold ${allOk ? "text-emerald-400" : "text-amber-500"}`}
+                >
+                  {okCount}/{totalCount} PASS
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Main content: Camera + Event Log */}
+      <div className="grid grid-cols-3 gap-3">
+        {/* Camera Feed — 2 cols */}
+        <div className="col-span-2 bg-zinc-900 rounded-lg border border-zinc-800 relative overflow-hidden flex flex-col">
+          <div className="absolute inset-x-0 top-0 h-px bg-white/5" />
+
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-800 shrink-0">
+            <Camera className="w-3.5 h-3.5 text-sky-400" />
+            <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+              Primary_Feed // CAM_01_GATE
+            </span>
+            <span className="text-[9px] uppercase tracking-widest text-zinc-600 ml-auto">
+              1920×1080 // H.264 // 30FPS
+            </span>
+            <span className="text-[9px] font-mono text-rose-500 font-bold animate-pulse">
+              ● LIVE
+            </span>
+          </div>
+
+          {/* Mock camera viewport */}
+          <div
+            className="flex-1 relative bg-zinc-950 m-3 rounded border border-zinc-800 overflow-hidden"
+            style={{ minHeight: 380 }}
+          >
+            {/* Night-vision style background */}
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  "radial-gradient(ellipse at 50% 50%, rgba(20,83,45,0.08) 0%, rgba(9,9,11,0.4) 70%), linear-gradient(180deg, rgba(9,9,11,0.2) 0%, rgba(9,9,11,0.5) 100%)",
+              }}
+            />
+
+            {/* Scan lines */}
+            <div
+              className="absolute inset-0 opacity-[0.03]"
+              style={{
+                backgroundImage:
+                  "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.1) 2px, rgba(255,255,255,0.1) 4px)",
+              }}
+            />
+
+            {/* Grid overlay */}
+            <div
+              className="absolute inset-0 opacity-10"
+              style={{
+                backgroundImage:
+                  "linear-gradient(rgba(63,63,70,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(63,63,70,0.4) 1px, transparent 1px)",
+                backgroundSize: "60px 60px",
+              }}
+            />
+
+            {/* Digital reticle — center crosshair */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="relative w-40 h-40">
+                {/* Horizontal line */}
+                <div className="absolute top-1/2 left-0 right-0 h-px bg-sky-400/20" />
+                {/* Vertical line */}
+                <div className="absolute left-1/2 top-0 bottom-0 w-px bg-sky-400/20" />
+                {/* Center dot */}
+                <div className="absolute top-1/2 left-1/2 w-2 h-2 -mt-1 -ml-1 rounded-full bg-sky-400/40" />
+                {/* Corner brackets */}
+                <div className="absolute top-0 left-0 w-6 h-6 border-t border-l border-sky-400/30" />
+                <div className="absolute top-0 right-0 w-6 h-6 border-t border-r border-sky-400/30" />
+                <div className="absolute bottom-0 left-0 w-6 h-6 border-b border-l border-sky-400/30" />
+                <div className="absolute bottom-0 right-0 w-6 h-6 border-b border-r border-sky-400/30" />
+              </div>
+            </div>
+
+            {/* Tracking bounding box — moves randomly */}
+            <div
+              className="absolute transition-all duration-[2000ms] ease-in-out"
+              style={{
+                left: `${trackX - 8}%`,
+                top: `${trackY - 10}%`,
+                width: "16%",
+                height: "20%",
+              }}
+            >
+              <div className="absolute inset-0 border-2 border-rose-500/70 rounded-sm shadow-[0_0_20px_rgba(244,63,94,0.2)]" />
+              {/* Corner accents */}
+              <div className="absolute -top-px -left-px w-4 h-4 border-t-2 border-l-2 border-rose-400 rounded-tl-sm" />
+              <div className="absolute -top-px -right-px w-4 h-4 border-t-2 border-r-2 border-rose-400 rounded-tr-sm" />
+              <div className="absolute -bottom-px -left-px w-4 h-4 border-b-2 border-l-2 border-rose-400 rounded-bl-sm" />
+              <div className="absolute -bottom-px -right-px w-4 h-4 border-b-2 border-r-2 border-rose-400 rounded-br-sm" />
+
+              {/* Label */}
+              <div className="absolute -top-5 left-0 bg-rose-500/90 px-2 py-0.5 rounded-sm">
+                <span className="text-[8px] font-mono font-bold text-white uppercase tracking-wider">
+                  PERSON 94.2%
+                </span>
+              </div>
+
+              {/* Track ID */}
+              <div className="absolute -bottom-5 right-0">
+                <span className="text-[8px] font-mono text-rose-400/60 uppercase tracking-wider">
+                  TRK_ID: 007
+                </span>
+              </div>
+            </div>
+
+            {/* Secondary tracking box (animal) */}
+            <div
+              className="absolute transition-all duration-[3000ms] ease-in-out"
+              style={{
+                left: `${85 - trackX * 0.3}%`,
+                top: `${70 - trackY * 0.3}%`,
+                width: "10%",
+                height: "8%",
+              }}
+            >
+              <div className="absolute inset-0 border border-amber-500/50 rounded-sm" />
+              <div className="absolute -top-4 left-0 bg-amber-500/80 px-1.5 py-0.5 rounded-sm">
+                <span className="text-[7px] font-mono font-bold text-white uppercase tracking-wider">
+                  ANIMAL 87%
+                </span>
+              </div>
+            </div>
+
+            {/* HUD overlays */}
+            <div className="absolute top-3 left-3 flex items-center gap-2">
+              <span className="text-[9px] font-mono text-rose-500 font-bold bg-zinc-950/80 px-2 py-0.5 rounded animate-pulse">
+                ● REC
+              </span>
+              <span className="text-[9px] font-mono text-zinc-500 bg-zinc-950/80 px-2 py-0.5 rounded">
+                CAM_01_GATE
+              </span>
+            </div>
+
+            <div className="absolute top-3 right-3 flex items-center gap-2">
+              <span className="text-[9px] font-mono text-sky-400 bg-zinc-950/80 px-2 py-0.5 rounded">
+                AI_DETECT: ON
+              </span>
+              <span className="text-[9px] font-mono text-emerald-400 bg-zinc-950/80 px-2 py-0.5 rounded">
+                IR: ACTIVE
+              </span>
+            </div>
+
+            <div className="absolute bottom-3 left-3">
+              <span className="text-[9px] font-mono text-zinc-500 bg-zinc-950/80 px-2 py-0.5 rounded">
+                3.1390°N 101.6869°E // ZONE_A
+              </span>
+            </div>
+
+            <div className="absolute bottom-3 right-3 flex items-center gap-2">
+              <span className="text-[9px] font-mono text-zinc-500 bg-zinc-950/80 px-2 py-0.5 rounded tabular-nums">
+                {new Date().toLocaleTimeString("en-GB")}
+              </span>
+            </div>
+          </div>
+
+          {/* Camera footer */}
+          <div className="flex items-center justify-between px-4 py-2 border-t border-zinc-800 shrink-0 bg-zinc-950/30">
+            <div className="flex items-center gap-3">
+              <span className="text-[9px] uppercase tracking-widest text-zinc-600">
+                OBJECTS: 2
+              </span>
+              <span className="text-[9px] uppercase tracking-widest text-rose-500 font-bold">
+                THREAT_LEVEL: ELEVATED
+              </span>
+            </div>
+            <span className="text-[9px] uppercase tracking-widest text-zinc-600">
+              NVR: RECORDING // BITRATE 4.2 Mbps
+            </span>
+          </div>
+        </div>
+
+        {/* Security Event Log — 1 col */}
+        <div className="flex flex-col gap-3">
+          {/* Event log */}
+          <div className="bg-zinc-900 rounded-lg border border-zinc-800 relative overflow-hidden flex-1">
+            <div className="absolute inset-x-0 top-0 h-px bg-white/5" />
+
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-800">
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
+              <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+                Security_Event_Log
+              </span>
+            </div>
+
+            <div
+              ref={evtRef}
+              className="overflow-y-auto p-2 space-y-1"
+              style={{ maxHeight: 400 }}
+            >
+              {events.map((evt) => (
+                <div
+                  key={evt.id}
+                  className={`
+                    px-3 py-2 rounded border bg-zinc-950 transition-all
+                    ${
+                      evt.severity === "critical"
+                        ? "border-rose-500/20"
+                        : evt.severity === "warning"
+                          ? "border-amber-500/10"
+                          : "border-zinc-800"
+                    }
+                  `}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`w-1.5 h-1.5 rounded-full ${eventDot(evt.severity)}`} />
+                      <span className="text-[9px] font-mono text-zinc-500 tabular-nums">
+                        {evt.timestamp}
+                      </span>
+                    </div>
+                    <span
+                      className={`text-[8px] uppercase tracking-widest font-bold ${eventColor(evt.severity)}`}
+                    >
+                      {evt.type}
+                    </span>
+                  </div>
+                  <p className={`text-[9px] font-mono leading-relaxed ${eventColor(evt.severity)}`}>
+                    {evt.message}
+                  </p>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-[8px] uppercase tracking-widest text-zinc-700">
+                      {evt.id}
+                    </span>
+                    <span className="text-[8px] uppercase tracking-widest text-zinc-700">
+                      {evt.zone}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Arm / Disarm Controls */}
+          <div className="bg-zinc-900 rounded-lg border border-zinc-800 relative overflow-hidden">
+            <div className="absolute inset-x-0 top-0 h-px bg-white/5" />
+
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-800">
+              <Fingerprint className="w-3.5 h-3.5 text-zinc-500" />
+              <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+                System_Control
+              </span>
+            </div>
+
+            <div className="p-4 space-y-3">
+              <button
+                onClick={() => setArmed(true)}
+                className={`
+                  w-full flex items-center justify-center gap-3 py-3 rounded-lg
+                  text-[11px] uppercase tracking-widest font-bold
+                  border transition-all duration-500 cursor-pointer
+                  ${
+                    armed
+                      ? "bg-emerald-400/10 border-emerald-500/50 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.15)]"
+                      : "bg-zinc-800/50 border-zinc-700 text-zinc-500 hover:bg-zinc-800 hover:border-zinc-600"
+                  }
+                `}
+              >
+                <Lock className="w-4 h-4" />
+                ARM ALL SYSTEMS
+                {armed && (
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                )}
+              </button>
+
+              <button
+                onClick={() => setArmed(false)}
+                className={`
+                  w-full flex items-center justify-center gap-3 py-3 rounded-lg
+                  text-[11px] uppercase tracking-widest font-bold
+                  border transition-all duration-500 cursor-pointer
+                  ${
+                    !armed
+                      ? "bg-rose-500/10 border-rose-500/50 text-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.15)]"
+                      : "bg-zinc-800/50 border-zinc-700 text-zinc-500 hover:bg-zinc-800 hover:border-zinc-600"
+                  }
+                `}
+              >
+                <Unlock className="w-4 h-4" />
+                DISARM SYSTEM
+                {!armed && (
+                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                )}
+              </button>
+
+              {/* Auth notice */}
+              <div className="flex items-center gap-2 px-3 py-2 bg-zinc-950 rounded border border-zinc-800">
+                <Fingerprint className="w-3 h-3 text-zinc-600" />
+                <span className="text-[8px] uppercase tracking-widest text-zinc-600">
+                  AUTH_REQUIRED: BIOMETRIC + PIN
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  )
-}
 
+      {/* Footer */}
+      <div className="mt-4 flex items-center justify-between px-1">
+        <span className="text-[9px] uppercase tracking-widest text-zinc-700">
+          SECURITY_CMD v1.4 // TRIPLE_LAYER_DEFENSE // 24/7 MONITOR
+        </span>
+        <span className="text-[9px] uppercase tracking-widest text-zinc-700">
+          NVR: 847GB/2TB // RETENTION: 30D // IRIV_AGRIBOX_01
+        </span>
+      </div>
+    </div>
+  );
+}

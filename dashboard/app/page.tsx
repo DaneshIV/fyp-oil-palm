@@ -1,357 +1,566 @@
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react'
-import { sensorApi, alertApi, diseaseApi } from '@/lib/api'
-import SensorCard from '@/components/ui/SensorCard'
-import { SensorCardSkeleton } from '@/components/ui/Skeleton'
-import ThemeToggle from '@/components/ui/ThemeToggle'
-import { AlertTriangle, CheckCircle, RefreshCw, Wifi } from 'lucide-react'
-import { formatDistanceToNow } from 'date-fns'
-import { useSensorWebSocket, useAlertWebSocket } from '@/hooks/useWebSocket'
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Thermometer,
+  Droplets,
+  Waves,
+  Zap,
+  Terminal,
+  Radio,
+  Cpu,
+  HardDrive,
+  Wifi,
+  CircleDot,
+  ChevronRight,
+} from "lucide-react";
 
-interface SensorData {
-  temperature: number
-  humidity: number
-  soil_moisture: number
-  ec_level: number
-  timestamp: string
+interface MetricCard {
+  id: string;
+  label: string;
+  unit: string;
+  value: number;
+  min: number;
+  max: number;
+  status: "nominal" | "warning" | "critical";
+  icon: React.ReactNode;
+  history: number[];
 }
 
-interface Alert {
-  id: number
-  alert_type: string
-  message: string
-  acknowledged: boolean
-  triggered_at: string
-}
+// ============================================================================
+// MOCK DATA — INTEGRATION POINT
+// Replace METRICS with live state from FastAPI backend.
+// Future: useEffect → fetch('/api/sensors/summary') or
+//         WebSocket subscription to ws://<host>/ws/telemetry for real-time push.
+// ============================================================================
+const METRICS: MetricCard[] = [
+  {
+    id: "TEMP",
+    label: "Ambient Temp",
+    unit: "°C",
+    value: 31.4,
+    min: 20,
+    max: 45,
+    status: "nominal",
+    icon: <Thermometer className="w-4 h-4" />,
+    history: [28, 29, 30, 29.5, 31, 30.5, 31.4, 32, 31.8, 31.4],
+  },
+  {
+    id: "HUMID",
+    label: "Rel. Humidity",
+    unit: "%",
+    value: 68,
+    min: 0,
+    max: 100,
+    status: "nominal",
+    icon: <Droplets className="w-4 h-4" />,
+    history: [72, 70, 68, 71, 69, 66, 65, 67, 68, 68],
+  },
+  {
+    id: "SOIL_M",
+    label: "Soil Moisture",
+    unit: "%",
+    value: 37,
+    min: 0,
+    max: 100,
+    status: "warning",
+    icon: <Waves className="w-4 h-4" />,
+    history: [52, 50, 48, 46, 44, 42, 41, 39, 38, 37],
+  },
+  {
+    id: "EC",
+    label: "Elec. Conductivity",
+    unit: "mS/cm",
+    value: 0.84,
+    min: 0,
+    max: 4,
+    status: "critical",
+    icon: <Zap className="w-4 h-4" />,
+    history: [1.6, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0, 0.92, 0.88, 0.84],
+  },
+];
 
-interface Disease {
-  id: number
-  disease_label: string
-  confidence: number
-  severity: string
-  tree_id: string
-  timestamp: string
-}
+// ============================================================================
+// MOCK DATA — INTEGRATION POINT
+// Replace SYSTEM_LOGS with live log stream from FastAPI backend.
+// Future: WebSocket subscription to ws://<host>/ws/syslog for real-time push,
+//         or useEffect → fetch('/api/system/logs?limit=30') for polling.
+// ============================================================================
+const SYSTEM_LOGS = [
+  "[BOOT] IRIV_AGRIBOX_01 FIRMWARE v3.2.1 LOADED",
+  "[SYS_OK] WATCHDOG TIMER INITIALIZED // INTERVAL 30000ms",
+  "[NET] WIFI_CONNECTED SSID:PLANTATION_5G RSSI:-42dBm",
+  "[NET] DHCP_LEASE 192.168.4.101 // GW 192.168.4.1",
+  "[SYS_OK] WEBSOCKET CONNECTED TO wss://agri.srv:8443/ws",
+  "[MQTT] BROKER_CONNECTED mqtt://192.168.4.50:1883",
+  "[MQTT] SUBSCRIBED topic/sensor/+/telemetry QoS=1",
+  "[SENSOR] DHT22_INIT OK // ADDR 0x44 // POLL 5000ms",
+  "[SENSOR] SOIL_PROBE_INIT OK // ADC_CH0 // CAL 0-4095→0-100%",
+  "[SENSOR] EC_METER_INIT OK // I2C 0x64 // TEMP_COMP ENABLED",
+  "[RELAY] 5CH_MODULE_INIT OK // GPIO [16,17,18,19,21]",
+  "[SYS_OK] ALL SUBSYSTEMS NOMINAL",
+  "[TELEM] TX → {temp:31.4,hum:68,soil:37,ec:0.84} // SEQ#4420",
+  "[RULE] EVAL RULE_001 → soil_moisture(37) < 40 → CONDITION_MET",
+  "[RELAY] ENGAGING RELAY_01 // DURATION 300s // PWR_CHECK OK",
+  "[WARN] SOIL_MOISTURE BELOW THRESHOLD → 37% < 40%",
+  "[WARN] EC_READING BELOW OPTIMAL → 0.84 mS/cm < 1.0",
+  "[CAM] FRAME_CAPTURED seq#1882 // RES 640x480 // FMT JPEG",
+  "[YOLO] INFERENCE_START model:ganoderma_v3.pt // DEVICE CPU",
+  "[YOLO] INFERENCE_COMPLETE 142ms // DETECTIONS: 0",
+  "[TELEM] TX → {temp:31.6,hum:67,soil:37,ec:0.83} // SEQ#4421",
+  "[GPS] FIX_ACQUIRED 3.1390°N 101.6869°E // SAT 8 // HDOP 1.2",
+  "[MQTT] PUB topic/alert/soil_low {zone:'BLK_B',val:37}",
+  "[SYS_OK] HEAP_FREE 142,384 bytes // UPTIME 847201s",
+  "[NET] PING agri.srv RTT 12ms",
+  "[TELEM] TX → {temp:31.5,hum:68,soil:38,ec:0.84} // SEQ#4422",
+  "[RELAY] RELAY_01 DISENGAGE // ELAPSED 300s // CYCLE_COMPLETE",
+  "[RULE] EVAL RULE_002 → temp(31.5) < 35 → CONDITION_NOT_MET",
+  "[RULE] EVAL RULE_003 → ec(0.84) < 1.2 AND days(2) < 3 → WAIT",
+  "[SYS_OK] CHECKPOINT SAVED // NEXT EVAL IN 250ms",
+];
 
-export default function OverviewPage() {
-  const [sensors, setSensors] = useState<SensorData | null>(null)
-  const [alerts, setAlerts] = useState<Alert[]>([])
-  const [diseases, setDiseases] = useState<Disease[]>([])
-  const [loading, setLoading] = useState(true)
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date())
-  const [isOnline, setIsOnline] = useState(true)
-  const { data: wsData, connected: wsConnected } = useSensorWebSocket()
-  const { unacknowledged: wsAlerts } = useAlertWebSocket()
+function MiniSparkline({
+  data,
+  status,
+}: {
+  data: number[];
+  status: MetricCard["status"];
+}) {
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const h = 32;
+  const w = 80;
+  const step = w / (data.length - 1);
 
-  /*const fetchData = async () => {
-    try {
-      const [sensorRes, alertRes, diseaseRes] = await Promise.all([
-        sensorApi.getLatest(),
-        alertApi.getAll(),
-        diseaseApi.getHistory(5),
-      ])
-      setSensors(sensorRes.data)
-      setAlerts(alertRes.data)
-      setDiseases(diseaseRes.data)
-      setLastUpdated(new Date())
-    } catch (err) {
-      console.error('Failed to fetch data:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
-    */
+  const points = data
+    .map((v, i) => `${i * step},${h - ((v - min) / range) * h}`)
+    .join(" ");
 
-  const fetchData = async () => {
-    try {
-      const [sensorRes, alertRes, diseaseRes] = await Promise.all([
-        sensorApi.getLatest(),
-        alertApi.getAll(),
-        diseaseApi.getHistory(5),
-      ])
-      setSensors(sensorRes.data)
-      setAlerts(alertRes.data)
-      setDiseases(diseaseRes.data)
-      setLastUpdated(new Date())
-      setIsOnline(true)
-    } catch (err) {
-      console.error('Failed to fetch data:', err)
-      setIsOnline(false)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const strokeColor =
+    status === "nominal"
+      ? "#34d399"
+      : status === "warning"
+        ? "#f59e0b"
+        : "#f43f5e";
 
-
-
-  const handleAcknowledge = async (id: number) => {
-    try {
-      await alertApi.acknowledge(id)
-      setAlerts(prev =>
-        prev.map(a => a.id === id ? { ...a, acknowledged: true } : a)
-      )
-    } catch (err) {
-      console.error('Failed to acknowledge:', err)
-    }
-  }
-
-  useEffect(() => {
-    fetchData()
-    const interval = setInterval(fetchData, 5000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const getSensorStatus = (type: string, value: number): 'normal' | 'warning' | 'danger' => {
-    if (type === 'temperature') {
-      if (value > 35) return 'danger'
-      if (value > 32) return 'warning'
-      return 'normal'
-    }
-    if (type === 'humidity') {
-      if (value < 50) return 'danger'
-      if (value < 60) return 'warning'
-      return 'normal'
-    }
-    if (type === 'soil_moisture') {
-      if (value < 30) return 'danger'
-      if (value < 40) return 'warning'
-      return 'normal'
-    }
-    if (type === 'ec') {
-      if (value < 1.0 || value > 2.5) return 'danger'
-      if (value < 1.2 || value > 2.2) return 'warning'
-      return 'normal'
-    }
-    return 'normal'
-  }
-
-  const unacknowledgedAlerts = alerts.filter(a => !a.acknowledged)
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-gray-400 flex items-center gap-3">
-          <RefreshCw size={20} className="animate-spin" />
-          Loading dashboard...
-        </div>
-      </div>
-    )
-  }
+  const fillId = `fill-${Math.random().toString(36).slice(2, 8)}`;
 
   return (
-    <div className="space-y-6">
+    <svg width={w} height={h} className="overflow-visible">
+      <defs>
+        <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={strokeColor} stopOpacity={0.15} />
+          <stop offset="100%" stopColor={strokeColor} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <polygon
+        points={`0,${h} ${points} ${w},${h}`}
+        fill={`url(#${fillId})`}
+      />
+      <polyline
+        points={points}
+        fill="none"
+        stroke={strokeColor}
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      {/* Current value dot */}
+      <circle
+        cx={w}
+        cy={h - ((data[data.length - 1] - min) / range) * h}
+        r={2.5}
+        fill={strokeColor}
+      />
+    </svg>
+  );
+}
 
-      {/* Header */}
-      {/* <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Overview</h1>
-          <p className="text-gray-400 text-sm mt-1">
-            Oil Palm IoT Monitoring System
-          </p>
+function TerminalLog() {
+  // ============================================================================
+  // MOCK DATA — INTEGRATION POINT
+  // Replace local lines state with live log stream from FastAPI backend.
+  // Future: WebSocket subscription to ws://<host>/ws/syslog for real-time push.
+  // ============================================================================
+  const [lines, setLines] = useState<string[]>(SYSTEM_LOGS.slice(0, 12));
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const indexRef = useRef(12);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const nextIndex = indexRef.current % SYSTEM_LOGS.length;
+      setLines((prev) => [...prev, SYSTEM_LOGS[nextIndex]]);
+      indexRef.current++;
+    }, 1800);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [lines]);
+
+  const colorize = (line: string) => {
+    if (line.startsWith("[WARN]")) return "text-amber-500";
+    if (line.startsWith("[ERR]") || line.startsWith("[CRIT]"))
+      return "text-rose-500";
+    if (line.startsWith("[SYS_OK]")) return "text-emerald-400";
+    if (line.startsWith("[RELAY]")) return "text-emerald-400/80";
+    if (line.startsWith("[YOLO]")) return "text-violet-400";
+    if (line.startsWith("[TELEM]")) return "text-sky-400/70";
+    if (line.startsWith("[RULE]")) return "text-amber-400/70";
+    if (line.startsWith("[MQTT]") || line.startsWith("[NET]"))
+      return "text-cyan-400/60";
+    return "text-zinc-500";
+  };
+
+  return (
+    <div className="bg-zinc-900 rounded-lg border border-zinc-800 flex flex-col h-full relative overflow-hidden">
+      <div className="absolute inset-x-0 top-0 h-px bg-white/5" />
+
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-800 shrink-0">
+        <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+        <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+          System_Console
+        </span>
+        <span className="text-[9px] uppercase tracking-widest text-zinc-600 ml-auto">
+          IRIV_AGRIBOX_01 // TTY0
+        </span>
+        <CircleDot className="w-2.5 h-2.5 text-emerald-400 animate-pulse" />
+      </div>
+
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto p-3 space-y-0.5 bg-zinc-950/50"
+        style={{ maxHeight: "360px" }}
+      >
+        {lines.map((line, i) => (
+          <div key={i} className="flex gap-2">
+            <span className="text-[9px] font-mono text-zinc-700 select-none shrink-0 w-8 text-right">
+              {String(i + 1).padStart(3, "0")}
+            </span>
+            <span className={`text-[11px] font-mono ${colorize(line)} leading-relaxed`}>
+              {line}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div className="px-4 py-2 border-t border-zinc-800 shrink-0 flex items-center gap-2">
+        <ChevronRight className="w-3 h-3 text-emerald-400" />
+        <span className="text-[10px] font-mono text-zinc-600 animate-pulse">
+          _
+        </span>
+      </div>
+    </div>
+  );
+}
+
+export default function CommandOverview() {
+  const statusColor = (s: MetricCard["status"]) =>
+    s === "nominal"
+      ? "text-emerald-400"
+      : s === "warning"
+        ? "text-amber-500"
+        : "text-rose-500";
+
+  const statusBorder = (s: MetricCard["status"]) =>
+    s === "nominal"
+      ? "border-zinc-800"
+      : s === "warning"
+        ? "border-amber-500/30"
+        : "border-rose-500/30";
+
+  return (
+    <div className="min-h-screen bg-zinc-950 p-6 text-zinc-300 font-mono">
+      {/* Header Bar */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <Cpu className="w-5 h-5 text-emerald-400" />
+          <div>
+            <h1 className="text-sm font-bold tracking-widest uppercase text-zinc-100">
+              Command Overview
+            </h1>
+            <p className="text-[10px] uppercase tracking-widest text-zinc-500 mt-0.5">
+              IRIV_AGRIBOX_01 // SYSTEM STATUS BOARD // REAL-TIME FEED
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
-          <Wifi size={14} className="text-green-400" />
-          <span>Live — updated {formatDistanceToNow(lastUpdated)} ago</span>
-          <ThemeToggle />
-          <button
-            onClick={fetchData}
-            className="p-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors"
+
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <Wifi className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="text-[9px] uppercase tracking-widest text-emerald-400">
+              ONLINE
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <HardDrive className="w-3.5 h-3.5 text-zinc-500" />
+            <span className="text-[9px] uppercase tracking-widest text-zinc-500">
+              142KB FREE
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Radio className="w-3.5 h-3.5 text-zinc-500" />
+            <span className="text-[9px] uppercase tracking-widest text-zinc-500">
+              RSSI -42dBm
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* 4-Card Metric Strip */}
+      <div className="grid grid-cols-4 gap-3 mb-6">
+        {METRICS.map((m) => (
+          <div
+            key={m.id}
+            className={`bg-zinc-900 rounded-lg border ${statusBorder(m.status)} p-4 relative overflow-hidden`}
           >
-            <RefreshCw size={14} />
-          </button>
-        </div>
-      </div> */}
+            {/* Top machined edge */}
+            <div className="absolute inset-x-0 top-0 h-px bg-white/5" />
 
-      {/* Header */}
-<div className="flex items-center justify-between">
-  <div>
-    <h1 className="text-2xl font-bold text-white">Overview</h1>
-    <p className="text-gray-400 text-sm mt-1">
-      Oil Palm IoT Monitoring System
-    </p>
-  </div>
-  <div className="flex items-center gap-2 text-xs">
-  {wsConnected && (
-    <div className="flex items-center gap-1 px-2 py-1 bg-green-500/10 border border-green-500/30 rounded-full">
-      <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-      <span className="text-green-400">WS Live</span>
-    </div>
-  )}
-  <Wifi size={14} className={isOnline ? 'text-green-400' : 'text-red-400'} />
-  <span className={isOnline ? 'text-green-400' : 'text-red-400 font-semibold'}>
-    {isOnline
-      ? `Live — updated ${formatDistanceToNow(lastUpdated)} ago`
-      : '⚠️ OFFLINE — Cannot reach server'}
-  </span>
-  <ThemeToggle />
-  <button
-    onClick={fetchData}
-    className="p-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors"
-  >
-    <RefreshCw size={14} className={isOnline ? 'text-gray-400' : 'text-red-400'} />
-  </button>
-</div>
-</div>
+            {/* Glow bar for non-nominal */}
+            {m.status !== "nominal" && (
+              <div
+                className={`absolute inset-x-0 top-0 h-0.5 ${m.status === "warning" ? "bg-amber-500" : "bg-rose-500"} animate-pulse`}
+              />
+            )}
 
-      {/* Sensor Cards */}
-      {(wsData || sensors) ? (
-  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-    <SensorCard
-      label="Temperature"
-      value={(wsData?.temperature ?? sensors?.temperature ?? 0).toFixed(1)}
-      unit="°C"
-      icon="🌡️"
-      status={getSensorStatus('temperature', wsData?.temperature ?? sensors?.temperature ?? 0)}
-      safeRange="22–35°C"
-      live
-    />
-    <SensorCard
-      label="Humidity"
-      value={(wsData?.humidity ?? sensors?.humidity ?? 0).toFixed(1)}
-      unit="%"
-      icon="💧"
-      status={getSensorStatus('humidity', wsData?.humidity ?? sensors?.humidity ?? 0)}
-      safeRange="60–85%"
-      live
-    />
-    <SensorCard
-      label="Soil Moisture"
-      value={(wsData?.soil_moisture ?? sensors?.soil_moisture ?? 0).toFixed(1)}
-      unit="%"
-      icon="🌱"
-      status={getSensorStatus('soil_moisture', wsData?.soil_moisture ?? sensors?.soil_moisture ?? 0)}
-      safeRange="40–70%"
-      live
-    />
-    <SensorCard
-      label="EC Level"
-      value={(wsData?.ec_level ?? sensors?.ec_level ?? 0).toFixed(2)}
-      unit="mS/cm"
-      icon="⚡"
-      status={getSensorStatus('ec', wsData?.ec_level ?? sensors?.ec_level ?? 0)}
-      safeRange="1.2–2.2 mS/cm"
-      live
-    />
-  </div>
-      ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <SensorCardSkeleton />
-          <SensorCardSkeleton />
-          <SensorCardSkeleton />
-          <SensorCardSkeleton />
-        </div>
-      )}
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <p className="text-[9px] uppercase tracking-widest text-zinc-600 mb-0.5">
+                  {m.id}
+                </p>
+                <p className="text-[10px] uppercase tracking-widest text-zinc-500">
+                  {m.label}
+                </p>
+              </div>
+              <div
+                className={`p-1.5 rounded-md ${m.status === "nominal" ? "bg-zinc-800 text-zinc-500" : m.status === "warning" ? "bg-amber-500/10 text-amber-500" : "bg-rose-500/10 text-rose-500"}`}
+              >
+                {m.icon}
+              </div>
+            </div>
 
-      {/* Stats Row */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <div className="text-sm text-gray-400 mb-1">Unacknowledged Alerts</div>
-          <div className={`text-3xl font-bold ${
-            unacknowledgedAlerts.length > 0 ? 'text-red-400' : 'text-green-400'
-          }`}>
-            {wsAlerts || unacknowledgedAlerts.length}
+            {/* Value */}
+            <div className="flex items-baseline gap-1.5 mb-3">
+              <span className={`text-2xl font-mono font-bold ${statusColor(m.status)}`}>
+                {m.value}
+              </span>
+              <span className="text-[10px] uppercase tracking-widest text-zinc-600">
+                {m.unit}
+              </span>
+            </div>
+
+            {/* Sparkline */}
+            <div className="flex items-center justify-between">
+              <MiniSparkline data={m.history} status={m.status} />
+              <div className="flex flex-col items-end gap-0.5">
+                <span className="text-[8px] uppercase tracking-widest text-zinc-600">
+                  RANGE
+                </span>
+                <span className="text-[9px] font-mono text-zinc-600">
+                  {m.min}–{m.max}
+                </span>
+              </div>
+            </div>
+
+            {/* Status pill */}
+            <div className="mt-3 flex items-center gap-1.5">
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${m.status === "nominal" ? "bg-emerald-400" : m.status === "warning" ? "bg-amber-500 animate-pulse" : "bg-rose-500 animate-pulse"}`}
+              />
+              <span className={`text-[9px] uppercase tracking-widest font-bold ${statusColor(m.status)}`}>
+                {m.status === "nominal"
+                  ? "NOMINAL"
+                  : m.status === "warning"
+                    ? "BELOW_THRESHOLD"
+                    : "CRITICAL_LOW"}
+              </span>
+            </div>
           </div>
-        </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <div className="text-sm text-gray-400 mb-1">Disease Detections</div>
-          <div className="text-3xl font-bold text-purple-400">
-            {diseases.length}
-          </div>
-        </div>
-        <div className={`rounded-xl border p-4 ${isOnline ? 'bg-gray-900 border-gray-800' : 'bg-red-500/10 border-red-500/30'}`}>
-  <div className="text-sm text-gray-400 mb-1">System Status</div>
-  <div className={`text-3xl font-bold ${isOnline ? 'text-green-400' : 'text-red-400'}`}>
-    {isOnline ? 'Online' : 'Offline'}
-  </div>
-</div>
+        ))}
       </div>
 
-      {/* Alerts + Disease side by side */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Main content grid */}
+      <div className="grid grid-cols-3 gap-3">
+        {/* System overview - left 2 cols */}
+        <div className="col-span-2 space-y-3">
+          {/* Node status strip */}
+          <div className="bg-zinc-900 rounded-lg border border-zinc-800 relative overflow-hidden">
+            <div className="absolute inset-x-0 top-0 h-px bg-white/5" />
+            <div className="px-5 py-3 border-b border-zinc-800 flex items-center gap-2">
+              <Cpu className="w-3.5 h-3.5 text-zinc-500" />
+              <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+                Node_Status
+              </span>
+            </div>
 
-        {/* Recent Alerts */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h2 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
-            <AlertTriangle size={16} className="text-yellow-400" />
-            Recent Alerts
-          </h2>
-          <div className="space-y-3">
-            {alerts.length === 0 ? (
-              <p className="text-gray-500 text-sm">No alerts yet</p>
-            ) : (
-              alerts.slice(0, 5).map(alert => (
-                <div
-                  key={alert.id}
-                  className={`flex items-start gap-3 p-3 rounded-lg ${
-                    alert.acknowledged
-                      ? 'bg-gray-800/50 opacity-50'
-                      : alert.alert_type === 'danger'
-                      ? 'bg-red-500/10 border border-red-500/20'
-                      : 'bg-yellow-500/10 border border-yellow-500/20'
-                  }`}
-                >
-                  <div className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${
-                    alert.alert_type === 'danger' ? 'bg-red-400' : 'bg-yellow-400'
-                  }`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-200 truncate">{alert.message}</p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {formatDistanceToNow(new Date(alert.triggered_at))} ago
-                    </p>
-                  </div>
-                  {alert.acknowledged ? (
-                    <CheckCircle size={14} className="text-green-400 flex-shrink-0 mt-0.5" />
-                  ) : (
-                    <button
-                      onClick={() => handleAcknowledge(alert.id)}
-                      className="text-xs px-2 py-1 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors flex-shrink-0"
-                    >
-                      Ack
-                    </button>
-                  )}
+            <div className="grid grid-cols-4 divide-x divide-zinc-800">
+              {[
+                { label: "UPTIME", value: "9d 19h 13m", color: "text-zinc-300" },
+                { label: "CPU_LOAD", value: "23%", color: "text-emerald-400" },
+                { label: "MQTT_MSG/s", value: "4.2", color: "text-cyan-400" },
+                { label: "WS_LATENCY", value: "12ms", color: "text-emerald-400" },
+              ].map((item) => (
+                <div key={item.label} className="px-5 py-4">
+                  <p className="text-[9px] uppercase tracking-widest text-zinc-600 mb-1">
+                    {item.label}
+                  </p>
+                  <p className={`text-lg font-mono font-bold ${item.color}`}>
+                    {item.value}
+                  </p>
                 </div>
-              ))
-            )}
+              ))}
+            </div>
+          </div>
+
+          {/* Active relay status */}
+          <div className="bg-zinc-900 rounded-lg border border-zinc-800 relative overflow-hidden">
+            <div className="absolute inset-x-0 top-0 h-px bg-white/5" />
+            <div className="px-5 py-3 border-b border-zinc-800 flex items-center gap-2">
+              <Zap className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+                Relay_Summary
+              </span>
+              <span className="text-[9px] uppercase tracking-widest text-emerald-400 ml-auto">
+                3/5 ENGAGED
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-zinc-800/50">
+                    {["RELAY", "PORT", "STATE", "V_OUT", "I_DRAW", "RUNTIME"].map(
+                      (h) => (
+                        <th
+                          key={h}
+                          className="px-5 py-2 text-[9px] uppercase tracking-widest text-zinc-600 font-medium"
+                        >
+                          {h}
+                        </th>
+                      )
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    { id: "RELAY_01", port: "AC_SOCKET_1", state: "ON", v: "238.1V", i: "4.2A", rt: "4m 22s" },
+                    { id: "RELAY_02", port: "AC_SOCKET_2", state: "OFF", v: "—", i: "—", rt: "—" },
+                    { id: "RELAY_03", port: "DC_PORT_A", state: "ON", v: "12.4V", i: "1.1A", rt: "12m 08s" },
+                    { id: "RELAY_04", port: "DC_PORT_B", state: "OFF", v: "—", i: "—", rt: "—" },
+                    { id: "RELAY_05", port: "DC_PORT_C", state: "ON", v: "12.6V", i: "1.3A", rt: "12m 08s" },
+                  ].map((r) => (
+                    <tr key={r.id} className="border-b border-zinc-800/30 hover:bg-zinc-800/20 transition-colors">
+                      <td className="px-5 py-2.5 text-[11px] font-mono text-zinc-400 font-bold">
+                        {r.id}
+                      </td>
+                      <td className="px-5 py-2.5 text-[10px] font-mono text-zinc-600">
+                        {r.port}
+                      </td>
+                      <td className="px-5 py-2.5">
+                        <span
+                          className={`inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold ${r.state === "ON" ? "text-emerald-400" : "text-zinc-600"}`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${r.state === "ON" ? "bg-emerald-400 animate-pulse" : "bg-zinc-700"}`}
+                          />
+                          {r.state}
+                        </span>
+                      </td>
+                      <td className={`px-5 py-2.5 text-[11px] font-mono font-bold ${r.state === "ON" ? "text-emerald-400" : "text-zinc-600"}`}>
+                        {r.v}
+                      </td>
+                      <td className={`px-5 py-2.5 text-[11px] font-mono font-bold ${r.state === "ON" ? "text-amber-500" : "text-zinc-600"}`}>
+                        {r.i}
+                      </td>
+                      <td className="px-5 py-2.5 text-[10px] font-mono text-zinc-500">
+                        {r.rt}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Zone overview */}
+          <div className="bg-zinc-900 rounded-lg border border-zinc-800 relative overflow-hidden">
+            <div className="absolute inset-x-0 top-0 h-px bg-white/5" />
+            <div className="px-5 py-3 border-b border-zinc-800 flex items-center gap-2">
+              <Waves className="w-3.5 h-3.5 text-zinc-500" />
+              <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+                Zone_Monitor
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 divide-x divide-zinc-800">
+              {[
+                { id: "BLK_A", status: "OPTIMAL", color: "text-emerald-400", dot: "bg-emerald-400", soil: "72%", ec: "1.8", det: "0" },
+                { id: "BLK_B", status: "WARNING", color: "text-amber-500", dot: "bg-amber-500", soil: "38%", ec: "0.9", det: "0" },
+                { id: "BLK_C", status: "INFECTED", color: "text-rose-500", dot: "bg-rose-500", soil: "55%", ec: "1.4", det: "7" },
+              ].map((z) => (
+                <div key={z.id} className="px-5 py-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className={`w-2 h-2 rounded-full ${z.dot} ${z.status === "INFECTED" ? "animate-pulse" : ""}`} />
+                    <span className="text-[11px] font-mono font-bold text-zinc-300">
+                      {z.id}
+                    </span>
+                    <span className={`text-[9px] uppercase tracking-widest font-bold ${z.color} ml-auto`}>
+                      {z.status}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between">
+                      <span className="text-[9px] uppercase tracking-widest text-zinc-600">
+                        SOIL
+                      </span>
+                      <span className="text-[10px] font-mono text-zinc-400">
+                        {z.soil}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[9px] uppercase tracking-widest text-zinc-600">
+                        EC
+                      </span>
+                      <span className="text-[10px] font-mono text-zinc-400">
+                        {z.ec} mS/cm
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[9px] uppercase tracking-widest text-zinc-600">
+                        DETECT
+                      </span>
+                      <span className={`text-[10px] font-mono ${z.det !== "0" ? "text-rose-500 font-bold" : "text-zinc-600"}`}>
+                        {z.det}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Recent Disease Detections */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h2 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
-            <span>🔬</span>
-            Recent Disease Detections
-          </h2>
-          <div className="space-y-3">
-            {diseases.length === 0 ? (
-              <p className="text-gray-500 text-sm">No detections yet</p>
-            ) : (
-              diseases.map(d => (
-                <div key={d.id} className="flex items-center gap-3 p-3 rounded-lg bg-gray-800">
-                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                    d.severity === 'High' ? 'bg-red-400' :
-                    d.severity === 'Medium' ? 'bg-yellow-400' : 'bg-green-400'
-                  }`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-200 capitalize">{d.disease_label}</p>
-                    <p className="text-xs text-gray-500">
-                      Tree {d.tree_id} · {d.confidence}% confidence
-                    </p>
-                  </div>
-                  <span className={`text-xs px-2 py-1 rounded-full ${
-                    d.severity === 'High' ? 'bg-red-500/20 text-red-400' :
-                    d.severity === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' :
-                    'bg-green-500/20 text-green-400'
-                  }`}>
-                    {d.severity}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
+        {/* Terminal log - right col */}
+        <div className="col-span-1 h-full">
+          <TerminalLog />
         </div>
+      </div>
 
+      {/* Footer */}
+      <div className="mt-4 flex items-center justify-between px-1">
+        <span className="text-[9px] uppercase tracking-widest text-zinc-700">
+          AGRIBOX_CMD_OVERVIEW v1.0 // SESSION {Math.random().toString(36).slice(2, 10).toUpperCase()}
+        </span>
+        <span className="text-[9px] uppercase tracking-widest text-zinc-700">
+          192.168.4.101:8443 // TLS 1.3
+        </span>
       </div>
     </div>
-  )
+  );
 }

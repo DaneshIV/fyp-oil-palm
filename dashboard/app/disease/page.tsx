@@ -1,496 +1,506 @@
-'use client'
-import { useEffect, useState } from 'react'
-import { diseaseApi } from '@/lib/api'
-import { RefreshCw, Microscope, AlertTriangle, CheckCircle, Clock, TrendingUp } from 'lucide-react'
-import { format, formatDistanceToNow, subDays, startOfDay } from 'date-fns'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
+"use client";
 
-interface DiseaseDetection {
-  id: number
-  image_path: string
-  disease_label: string
-  confidence: number
-  severity: string
-  tree_id: string
-  block_id: string
-  timestamp: string
+import React from "react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from "recharts";
+import {
+  Bug,
+  TreePine,
+  ShieldCheck,
+  Target,
+  TrendingUp,
+  CircleDot,
+  Cpu,
+  Layers,
+} from "lucide-react";
+
+interface MetricCard {
+  id: string;
+  label: string;
+  value: string;
+  subValue: string;
+  icon: React.ReactNode;
+  color: string;
+  trend?: string;
 }
 
-const DISEASE_INFO: Record<string, { description: string; action: string; color: string; bg: string }> = {
-  ganoderma: {
-    description: 'Basal Stem Rot caused by Ganoderma boninense fungus. Affects trunk base.',
-    action: 'Isolate infected tree immediately. Apply fungicide. Monitor surrounding trees.',
-    color: 'text-red-400',
-    bg: 'bg-red-500/10 border-red-500/30',
+// ============================================================================
+// MOCK DATA — INTEGRATION POINT
+// Replace METRICS with live AI detection stats from FastAPI backend.
+// Future: useEffect → fetch('/api/disease/stats') for aggregated metrics,
+//         WebSocket subscription to ws://<host>/ws/detections for real-time count.
+// ============================================================================
+const METRICS: MetricCard[] = [
+  {
+    id: "TOTAL_DET",
+    label: "Total Detections",
+    value: "1,247",
+    subValue: "LAST 30 DAYS",
+    icon: <Target className="w-4 h-4" />,
+    color: "text-sky-400",
+    trend: "+12.3%",
   },
-  bud_rot: {
-    description: 'Bud Rot caused by Phytophthora palmivora. Affects crown and spear leaves.',
-    action: 'Remove infected tissue. Apply copper-based fungicide. Improve drainage.',
-    color: 'text-orange-400',
-    bg: 'bg-orange-500/10 border-orange-500/30',
+  {
+    id: "DISEASED",
+    label: "Diseased Trees",
+    value: "18",
+    subValue: "OF 108 TOTAL",
+    icon: <Bug className="w-4 h-4" />,
+    color: "text-rose-500",
+    trend: "+3",
   },
-  unhealthy: {
-    description: 'General disease symptoms detected including possible Bud Rot or Crown Disease.',
-    action: 'Inspect tree closely. Collect samples for lab analysis. Apply preventive treatment.',
-    color: 'text-yellow-400',
-    bg: 'bg-yellow-500/10 border-yellow-500/30',
+  {
+    id: "HEALTHY",
+    label: "Healthy Trees",
+    value: "90",
+    subValue: "83.3% FLEET",
+    icon: <TreePine className="w-4 h-4" />,
+    color: "text-emerald-400",
+    trend: "STABLE",
   },
-  crown_disease: {
-    description: 'Crown Disease causes frond deformity at the canopy level.',
-    action: 'Monitor progression. Apply foliar nutrients. Consult agronomist.',
-    color: 'text-yellow-400',
-    bg: 'bg-yellow-500/10 border-yellow-500/30',
+  {
+    id: "AVG_CONF",
+    label: "Avg Model Confidence",
+    value: "91.4%",
+    subValue: "YOLOv8n-CUSTOM",
+    icon: <Cpu className="w-4 h-4" />,
+    color: "text-violet-400",
+    trend: "+0.8%",
   },
-  fruit_bunch_rot: {
-    description: 'Fruit Bunch Rot causes discoloration and decay of Fresh Fruit Bunches.',
-    action: 'Harvest affected bunches immediately. Improve field sanitation.',
-    color: 'text-yellow-400',
-    bg: 'bg-yellow-500/10 border-yellow-500/30',
-  },
-  immature: {
-    description: 'Young or immature palm tree detected. Not yet at productive stage.',
-    action: 'Continue regular care and monitoring. Ensure adequate nutrition and irrigation.',
-    color: 'text-blue-400',
-    bg: 'bg-blue-500/10 border-blue-500/30',
-  },
-  healthy: {
-    description: 'No disease detected. Tree appears healthy.',
-    action: 'Continue regular monitoring and maintenance schedule.',
-    color: 'text-green-400',
-    bg: 'bg-green-500/10 border-green-500/30',
-  },
-}
+];
 
-const LABEL_COLORS: Record<string, string> = {
-  healthy:    '#4ade80',
-  ganoderma:  '#f87171',
-  unhealthy:  '#facc15',
-  immature:   '#60a5fa',
-  bud_rot:    '#fb923c',
-  crown_disease: '#a78bfa',
-  fruit_bunch_rot: '#f472b6',
-}
+// ============================================================================
+// MOCK DATA — INTEGRATION POINT
+// Replace DAILY_TREND with live daily scan results from FastAPI backend.
+// Future: useEffect → fetch('/api/disease/trend?days=7') for chart data.
+// ============================================================================
+const DAILY_TREND = [
+  { day: "May 24", infections: 4, healthy: 38, scans: 42 },
+  { day: "May 25", infections: 7, healthy: 35, scans: 42 },
+  { day: "May 26", infections: 3, healthy: 39, scans: 42 },
+  { day: "May 27", infections: 5, healthy: 37, scans: 42 },
+  { day: "May 28", infections: 8, healthy: 34, scans: 42 },
+  { day: "May 29", infections: 6, healthy: 36, scans: 42 },
+  { day: "May 30", infections: 9, healthy: 33, scans: 42 },
+];
 
-const getSeverityStyle = (severity: string) => {
-  switch (severity.toLowerCase()) {
-    case 'high':   return 'bg-red-500/20 text-red-400 border border-red-500/30'
-    case 'medium': return 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-    case 'low':    return 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-    case 'none':   return 'bg-green-500/20 text-green-400 border border-green-500/30'
-    default:       return 'bg-gray-500/20 text-gray-400'
-  }
-}
+// ============================================================================
+// MOCK DATA — INTEGRATION POINT
+// Replace DISEASE_CLASSES with live class distribution from FastAPI backend.
+// Future: useEffect → fetch('/api/disease/classes') for pie chart breakdown.
+// ============================================================================
+const DISEASE_CLASSES = [
+  { name: "Healthy", value: 90, color: "#34d399" },
+  { name: "Leaf Spot", value: 8, color: "#f59e0b" },
+  { name: "Ganoderma", value: 7, color: "#f43f5e" },
+  { name: "Bud Rot", value: 3, color: "#a78bfa" },
+];
 
-const ConfidenceBar = ({ confidence }: { confidence: number }) => (
-  <div className="w-full bg-gray-800 rounded-full h-2 mt-2">
-    <div
-      className="h-2 rounded-full transition-all duration-500"
-      style={{
-        width: `${confidence}%`,
-        background: confidence >= 80 ? '#f87171' : confidence >= 60 ? '#facc15' : '#4ade80',
-      }}
-    />
-  </div>
-)
+// ============================================================================
+// MOCK DATA — INTEGRATION POINT
+// Replace RECENT_DETECTIONS with live detection feed from FastAPI backend.
+// Future: useEffect → fetch('/api/disease/detections?limit=8') or
+//         WebSocket subscription to ws://<host>/ws/detections for real-time feed.
+// ============================================================================
+const RECENT_DETECTIONS = [
+  { id: "DET_1247", zone: "BLK_C", class: "Ganoderma", confidence: 96.2, time: "15:04:22", severity: "critical" },
+  { id: "DET_1246", zone: "BLK_C", class: "Leaf Spot", confidence: 88.7, time: "15:03:58", severity: "warning" },
+  { id: "DET_1245", zone: "BLK_C", class: "Ganoderma", confidence: 94.1, time: "15:01:14", severity: "critical" },
+  { id: "DET_1244", zone: "BLK_B", class: "Leaf Spot", confidence: 79.3, time: "14:58:42", severity: "warning" },
+  { id: "DET_1243", zone: "BLK_C", class: "Ganoderma", confidence: 91.8, time: "14:55:09", severity: "critical" },
+  { id: "DET_1242", zone: "BLK_C", class: "Bud Rot", confidence: 72.4, time: "14:52:33", severity: "warning" },
+  { id: "DET_1241", zone: "BLK_A", class: "Healthy", confidence: 98.1, time: "14:50:01", severity: "nominal" },
+  { id: "DET_1240", zone: "BLK_C", class: "Ganoderma", confidence: 93.6, time: "14:48:17", severity: "critical" },
+];
 
-export default function DiseasePage() {
-  const [detections, setDetections] = useState<DiseaseDetection[]>([])
-  const [selected,   setSelected]   = useState<DiseaseDetection | null>(null)
-  const [loading,    setLoading]    = useState(true)
-  const [filter,     setFilter]     = useState('all')
-
-  const fetchData = async () => {
-    try {
-      const res = await diseaseApi.getHistory(50)
-      setDetections(res.data)
-      if (res.data.length > 0 && !selected) {
-        setSelected(res.data[0])
-      }
-    } catch (err) {
-      console.error('Failed to fetch disease data:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchData()
-    const interval = setInterval(fetchData, 10000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const filtered = filter === 'all'
-    ? detections
-    : filter === 'diseased'
-    ? detections.filter(d => d.disease_label !== 'healthy')
-    : detections.filter(d => d.disease_label === 'healthy')
-
-  // Stats
-  const totalDetections = detections.length
-  const diseasedCount   = detections.filter(d => d.disease_label !== 'healthy').length
-  const healthyCount    = detections.filter(d => d.disease_label === 'healthy').length
-  const avgConfidence   = detections.length > 0
-    ? (detections.reduce((sum, d) => sum + d.confidence, 0) / detections.length).toFixed(1)
-    : '0'
-
-  // Chart data — detections per day (last 7 days)
-  const last7Days = Array.from({ length: 7 }, (_, i) => {
-    const day   = startOfDay(subDays(new Date(), 6 - i))
-    const label = format(day, 'dd MMM')
-    const dayDetections = detections.filter(d =>
-      startOfDay(new Date(d.timestamp)).getTime() === day.getTime()
-    )
-    return {
-      date:      label,
-      healthy:   dayDetections.filter(d => d.disease_label === 'healthy').length,
-      diseased:  dayDetections.filter(d => d.disease_label !== 'healthy').length,
-      total:     dayDetections.length,
-    }
-  })
-
-  // Pie chart data — breakdown by class
-  const classBreakdown = Object.entries(
-    detections.reduce((acc, d) => {
-      acc[d.disease_label] = (acc[d.disease_label] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
-  ).map(([name, value]) => ({ name, value }))
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-gray-400 flex items-center gap-3">
-          <RefreshCw size={20} className="animate-spin" />
-          Loading disease data...
+function BarTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-zinc-900 border border-zinc-700 rounded px-3 py-2 shadow-xl">
+      <p className="text-[9px] uppercase tracking-widest text-zinc-500 mb-1.5">
+        {label}
+      </p>
+      {payload.map((p: any) => (
+        <div key={p.dataKey} className="flex items-center gap-2">
+          <span
+            className="w-2 h-2 rounded-sm"
+            style={{ background: p.fill }}
+          />
+          <span className="text-[10px] font-mono text-zinc-400">
+            {p.dataKey}: <span className="font-bold text-zinc-200">{p.value}</span>
+          </span>
         </div>
-      </div>
-    )
-  }
+      ))}
+    </div>
+  );
+}
+
+function PieLabel({ cx, cy, midAngle, innerRadius, outerRadius, name, value, percent }: any) {
+  const RADIAN = Math.PI / 180;
+  const radius = outerRadius + 28;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
 
   return (
-    <div className="space-y-6">
+    <text
+      x={x}
+      y={y}
+      fill="#a1a1aa"
+      textAnchor={x > cx ? "start" : "end"}
+      dominantBaseline="central"
+      style={{ fontSize: 10, fontFamily: "ui-monospace, monospace", letterSpacing: "0.05em" }}
+    >
+      {name} ({value})
+    </text>
+  );
+}
 
+export default function DiseaseAIStats() {
+  const severityColor = (s: string) =>
+    s === "critical"
+      ? "text-rose-500"
+      : s === "warning"
+        ? "text-amber-500"
+        : "text-emerald-400";
+
+  const severityDot = (s: string) =>
+    s === "critical"
+      ? "bg-rose-500"
+      : s === "warning"
+        ? "bg-amber-500"
+        : "bg-emerald-400";
+
+  return (
+    <div className="min-h-screen bg-zinc-950 p-6 text-zinc-300 font-mono">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-            <Microscope size={24} className="text-purple-400" />
-            Disease AI Detection
-          </h1>
-          <p className="text-gray-400 text-sm mt-1">
-            YOLOv8 model — oil palm disease classification
-          </p>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <ShieldCheck className="w-5 h-5 text-violet-400" />
+          <div>
+            <h1 className="text-sm font-bold tracking-widest uppercase text-zinc-100">
+              Disease AI Analytics
+            </h1>
+            <p className="text-[10px] uppercase tracking-widest text-zinc-500 mt-0.5">
+              YOLOv8n-CUSTOM // ganoderma_v3.pt // INFERENCE STATISTICS
+            </p>
+          </div>
         </div>
-        <button
-          onClick={fetchData}
-          className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors"
-        >
-          <RefreshCw size={16} className="text-gray-400" />
-        </button>
+
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-md px-3 py-1.5">
+            <Cpu className="w-3 h-3 text-violet-400" />
+            <span className="text-[10px] uppercase tracking-widest text-zinc-500">
+              MODEL_STATUS:
+            </span>
+            <span className="text-[10px] uppercase tracking-widest text-emerald-400 font-bold">
+              LOADED
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <CircleDot className="w-3 h-3 text-emerald-400 animate-pulse" />
+            <span className="text-[10px] uppercase tracking-widest text-emerald-400">
+              ACTIVE
+            </span>
+          </div>
+        </div>
       </div>
 
-      {/* Stats Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <div className="text-xs text-gray-500 mb-1">Total Scans</div>
-          <div className="text-3xl font-bold text-white">{totalDetections}</div>
-        </div>
-        <div className="bg-gray-900 border border-red-500/20 rounded-xl p-4">
-          <div className="text-xs text-gray-500 mb-1">Diseased</div>
-          <div className="text-3xl font-bold text-red-400">{diseasedCount}</div>
-        </div>
-        <div className="bg-gray-900 border border-green-500/20 rounded-xl p-4">
-          <div className="text-xs text-gray-500 mb-1">Healthy</div>
-          <div className="text-3xl font-bold text-green-400">{healthyCount}</div>
-        </div>
-        <div className="bg-gray-900 border border-purple-500/20 rounded-xl p-4">
-          <div className="text-xs text-gray-500 mb-1">Avg Confidence</div>
-          <div className="text-3xl font-bold text-purple-400">{avgConfidence}%</div>
-        </div>
+      {/* Metric Grid */}
+      <div className="grid grid-cols-4 gap-3 mb-6">
+        {METRICS.map((m) => (
+          <div
+            key={m.id}
+            className="bg-zinc-900 rounded-lg border border-zinc-800 p-4 relative overflow-hidden"
+          >
+            <div className="absolute inset-x-0 top-0 h-px bg-white/5" />
+
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <p className="text-[9px] uppercase tracking-widest text-zinc-600 mb-0.5">
+                  {m.id}
+                </p>
+                <p className="text-[10px] uppercase tracking-widest text-zinc-500">
+                  {m.label}
+                </p>
+              </div>
+              <div
+                className={`p-1.5 rounded-md bg-zinc-800 ${m.color}`}
+              >
+                {m.icon}
+              </div>
+            </div>
+
+            <div className="flex items-baseline gap-2 mb-2">
+              <span className={`text-2xl font-mono font-bold ${m.color}`}>
+                {m.value}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] uppercase tracking-widest text-zinc-600">
+                {m.subValue}
+              </span>
+              {m.trend && (
+                <div className="flex items-center gap-1">
+                  <TrendingUp className="w-3 h-3 text-zinc-600" />
+                  <span className="text-[9px] font-mono text-zinc-500">
+                    {m.trend}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        {/* Bar Chart — 7-day trend (2 cols) */}
+        <div className="col-span-2 bg-zinc-900 rounded-lg border border-zinc-800 relative overflow-hidden">
+          <div className="absolute inset-x-0 top-0 h-px bg-white/5" />
 
-        {/* Bar chart — detections per day */}
-        <div className="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h2 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
-            <TrendingUp size={14} className="text-purple-400" />
-            Detection History — Last 7 Days
-          </h2>
-          {detections.length === 0 ? (
-            <div className="h-48 flex items-center justify-center text-gray-600 text-sm">
-              No detection data yet
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={last7Days} margin={{ top: 4, right: 4, bottom: 4, left: -20 }}>
+          <div className="flex items-center gap-2 px-5 py-3 border-b border-zinc-800">
+            <TrendingUp className="w-3.5 h-3.5 text-zinc-500" />
+            <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+              Infection_Trend // Last 7 Days
+            </span>
+            <span className="text-[9px] uppercase tracking-widest text-zinc-600 ml-auto">
+              DAILY SCAN RESULTS
+            </span>
+          </div>
+
+          <div className="px-4 py-4" style={{ height: 280 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={DAILY_TREND}
+                margin={{ top: 8, right: 12, left: -10, bottom: 0 }}
+                barGap={2}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="rgba(63,63,70,0.4)"
+                  vertical={false}
+                />
                 <XAxis
-                  dataKey="date"
-                  tick={{ fill: '#6b7280', fontSize: 11 }}
-                  axisLine={false}
+                  dataKey="day"
+                  tick={{
+                    fontSize: 9,
+                    fill: "#52525b",
+                    fontFamily: "ui-monospace, monospace",
+                  }}
+                  axisLine={{ stroke: "#27272a" }}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fill: '#6b7280', fontSize: 11 }}
+                  tick={{
+                    fontSize: 9,
+                    fill: "#52525b",
+                    fontFamily: "ui-monospace, monospace",
+                  }}
                   axisLine={false}
                   tickLine={false}
-                  allowDecimals={false}
                 />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#111827',
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#f3f4f6',
-                    fontSize: '12px',
-                  }}
+                <Tooltip content={<BarTooltip />} />
+                <Bar
+                  dataKey="infections"
+                  fill="#f43f5e"
+                  radius={[2, 2, 0, 0]}
+                  barSize={18}
                 />
-                <Bar dataKey="healthy"  name="Healthy"  fill="#4ade80" radius={[4,4,0,0]} stackId="a" />
-                <Bar dataKey="diseased" name="Diseased" fill="#f87171" radius={[4,4,0,0]} stackId="a" />
+                <Bar
+                  dataKey="healthy"
+                  fill="#34d399"
+                  radius={[2, 2, 0, 0]}
+                  barSize={18}
+                  fillOpacity={0.4}
+                />
               </BarChart>
             </ResponsiveContainer>
-          )}
-          <div className="flex items-center gap-4 mt-2">
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-sm bg-green-400" />
-              <span className="text-xs text-gray-400">Healthy</span>
+          </div>
+
+          <div className="flex items-center gap-4 px-5 py-2 border-t border-zinc-800/50 bg-zinc-950/30">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-2 rounded-sm bg-rose-500" />
+              <span className="text-[9px] uppercase tracking-widest text-zinc-600">
+                Infections
+              </span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-sm bg-red-400" />
-              <span className="text-xs text-gray-400">Diseased</span>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-2 rounded-sm bg-emerald-400/40" />
+              <span className="text-[9px] uppercase tracking-widest text-zinc-600">
+                Healthy Scans
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Pie chart — class breakdown */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h2 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
-            <Microscope size={14} className="text-purple-400" />
-            Class Breakdown
-          </h2>
-          {classBreakdown.length === 0 ? (
-            <div className="h-48 flex items-center justify-center text-gray-600 text-sm">
-              No data yet
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
+        {/* Pie Chart — disease class breakdown (1 col) */}
+        <div className="bg-zinc-900 rounded-lg border border-zinc-800 relative overflow-hidden">
+          <div className="absolute inset-x-0 top-0 h-px bg-white/5" />
+
+          <div className="flex items-center gap-2 px-5 py-3 border-b border-zinc-800">
+            <Layers className="w-3.5 h-3.5 text-zinc-500" />
+            <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+              Class_Breakdown
+            </span>
+          </div>
+
+          <div className="px-2 py-2" style={{ height: 280 }}>
+            <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={classBreakdown}
+                  data={DISEASE_CLASSES}
                   cx="50%"
                   cy="50%"
-                  innerRadius={50}
-                  outerRadius={80}
+                  innerRadius={55}
+                  outerRadius={85}
                   paddingAngle={3}
                   dataKey="value"
+                  label={PieLabel}
+                  strokeWidth={0}
                 >
-                  {classBreakdown.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={LABEL_COLORS[entry.name] || '#9ca3af'}
-                    />
+                  {DISEASE_CLASSES.map((entry, index) => (
+                    <Cell key={index} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#111827',
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#f3f4f6',
-                    fontSize: '12px',
-                  }}
-                />
-                <Legend
-                  formatter={(value) => (
-                    <span style={{ color: '#9ca3af', fontSize: '11px', textTransform: 'capitalize' }}>
-                      {value.replace(/_/g, ' ')}
-                    </span>
-                  )}
-                />
               </PieChart>
             </ResponsiveContainer>
-          )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 px-5 py-2 border-t border-zinc-800/50 bg-zinc-950/30">
+            {DISEASE_CLASSES.map((cls) => (
+              <div key={cls.name} className="flex items-center gap-1.5">
+                <span
+                  className="w-2 h-2 rounded-full"
+                  style={{ background: cls.color }}
+                />
+                <span className="text-[9px] uppercase tracking-widest text-zinc-600">
+                  {cls.name}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Recent Detections Table */}
+      <div className="bg-zinc-900 rounded-lg border border-zinc-800 relative overflow-hidden">
+        <div className="absolute inset-x-0 top-0 h-px bg-white/5" />
 
-        {/* Detection List */}
-        <div className="lg:col-span-1 bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-gray-300">Detection History</h2>
-            <select
-              value={filter}
-              onChange={e => setFilter(e.target.value)}
-              className="bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg px-2 py-1 focus:outline-none"
-            >
-              <option value="all">All</option>
-              <option value="diseased">Diseased</option>
-              <option value="healthy">Healthy</option>
-            </select>
-          </div>
+        <div className="flex items-center gap-2 px-5 py-3 border-b border-zinc-800">
+          <Bug className="w-3.5 h-3.5 text-rose-500" />
+          <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+            Recent_Detections
+          </span>
+          <span className="text-[9px] uppercase tracking-widest text-zinc-600 ml-auto">
+            {RECENT_DETECTIONS.length} LATEST
+          </span>
+        </div>
 
-          <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
-            {filtered.length === 0 ? (
-              <p className="text-gray-500 text-sm text-center py-8">No detections found</p>
-            ) : (
-              filtered.map(d => (
-                <button
-                  key={d.id}
-                  onClick={() => setSelected(d)}
-                  className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                    selected?.id === d.id
-                      ? 'border-purple-500/50 bg-purple-500/10'
-                      : 'border-gray-800 hover:border-gray-700 hover:bg-gray-800'
-                  }`}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-zinc-800/50">
+                {["ID", "ZONE", "CLASS", "CONFIDENCE", "TIME", "SEVERITY"].map(
+                  (h) => (
+                    <th
+                      key={h}
+                      className="px-4 py-2.5 text-[9px] uppercase tracking-widest text-zinc-600 font-medium"
+                    >
+                      {h}
+                    </th>
+                  )
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {RECENT_DETECTIONS.map((det) => (
+                <tr
+                  key={det.id}
+                  className="border-b border-zinc-800/30 hover:bg-zinc-800/20 transition-colors"
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className={`text-sm font-medium capitalize ${
-                      d.disease_label === 'healthy' ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                      {d.disease_label.replace('_', ' ')}
+                  <td className="px-4 py-2.5 text-[11px] font-mono text-zinc-400 font-bold">
+                    {det.id}
+                  </td>
+                  <td className="px-4 py-2.5 text-[10px] font-mono text-zinc-500">
+                    {det.zone}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span
+                      className={`text-[10px] uppercase tracking-widest font-bold ${
+                        det.class === "Ganoderma"
+                          ? "text-rose-500"
+                          : det.class === "Healthy"
+                            ? "text-emerald-400"
+                            : "text-amber-500"
+                      }`}
+                    >
+                      {det.class}
                     </span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${getSeverityStyle(d.severity)}`}>
-                      {d.severity}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-16 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${
+                            det.confidence > 90
+                              ? "bg-emerald-400"
+                              : det.confidence > 75
+                                ? "bg-amber-500"
+                                : "bg-rose-500"
+                          }`}
+                          style={{ width: `${det.confidence}%` }}
+                        />
+                      </div>
+                      <span className="text-[10px] font-mono text-zinc-400 tabular-nums">
+                        {det.confidence}%
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5 text-[10px] font-mono text-zinc-600">
+                    {det.time}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span
+                      className={`inline-flex items-center gap-1.5 text-[9px] uppercase tracking-widest font-bold ${severityColor(det.severity)}`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${severityDot(det.severity)} ${det.severity === "critical" ? "animate-pulse" : ""}`}
+                      />
+                      {det.severity === "critical"
+                        ? "CRIT"
+                        : det.severity === "warning"
+                          ? "WARN"
+                          : "OK"}
                     </span>
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    Tree {d.tree_id} · Block {d.block_id}
-                  </div>
-                  <ConfidenceBar confidence={d.confidence} />
-                  <div className="text-xs text-gray-600 mt-1">{d.confidence}% confidence</div>
-                </button>
-              ))
-            )}
-          </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
+      </div>
 
-        {/* Detection Detail */}
-        <div className="lg:col-span-2">
-          {selected ? (
-            <div className="space-y-4">
-
-              {/* Main detail card */}
-              <div className={`rounded-xl border p-6 ${
-                DISEASE_INFO[selected.disease_label]?.bg || 'bg-gray-900 border-gray-800'
-              }`}>
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h2 className={`text-xl font-bold capitalize ${
-                      DISEASE_INFO[selected.disease_label]?.color || 'text-white'
-                    }`}>
-                      {selected.disease_label.replace(/_/g, ' ')}
-                    </h2>
-                    <p className="text-gray-400 text-sm mt-1">
-                      Detection ID #{selected.id}
-                    </p>
-                  </div>
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${getSeverityStyle(selected.severity)}`}>
-                    {selected.severity} Severity
-                  </span>
-                </div>
-
-                {/* Confidence */}
-                <div className="mb-4">
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-400">Model Confidence</span>
-                    <span className="text-white font-bold">{selected.confidence}%</span>
-                  </div>
-                  <div className="w-full bg-gray-800 rounded-full h-3">
-                    <div
-                      className="h-3 rounded-full transition-all duration-700"
-                      style={{
-                        width: `${selected.confidence}%`,
-                        background: selected.confidence >= 80
-                          ? '#f87171'
-                          : selected.confidence >= 60
-                          ? '#facc15'
-                          : '#4ade80',
-                      }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-xs text-gray-600 mt-1">
-                    <span>0%</span>
-                    <span className="text-yellow-600">60% threshold</span>
-                    <span>100%</span>
-                  </div>
-                </div>
-
-                {/* Tree info */}
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div className="bg-black/20 rounded-lg p-3">
-                    <div className="text-xs text-gray-500 mb-1">Tree ID</div>
-                    <div className="text-white font-semibold">{selected.tree_id || 'N/A'}</div>
-                  </div>
-                  <div className="bg-black/20 rounded-lg p-3">
-                    <div className="text-xs text-gray-500 mb-1">Block ID</div>
-                    <div className="text-white font-semibold">{selected.block_id || 'N/A'}</div>
-                  </div>
-                </div>
-
-                {/* Timestamp */}
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <Clock size={12} />
-                  <span>
-                    {format(new Date(selected.timestamp), 'dd MMM yyyy, HH:mm:ss')}
-                    {' '}·{' '}
-                    {formatDistanceToNow(new Date(selected.timestamp))} ago
-                  </span>
-                </div>
-              </div>
-
-              {/* Disease info */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-                  <Microscope size={14} className="text-purple-400" />
-                  Disease Information
-                </h3>
-                <p className="text-sm text-gray-400 mb-4">
-                  {DISEASE_INFO[selected.disease_label]?.description || 'No information available.'}
-                </p>
-
-                <h3 className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2">
-                  <AlertTriangle size={14} className="text-yellow-400" />
-                  Recommended Action
-                </h3>
-                <p className="text-sm text-gray-400">
-                  {DISEASE_INFO[selected.disease_label]?.action || 'Consult an agronomist.'}
-                </p>
-              </div>
-
-              {/* Image path */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                <h3 className="text-sm font-semibold text-gray-300 mb-3">
-                  Captured Image
-                </h3>
-                <div className="bg-gray-800 rounded-lg p-4 flex items-center gap-3">
-                  <div className="w-12 h-12 bg-gray-700 rounded-lg flex items-center justify-center text-2xl">
-                    🌴
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400 font-mono truncate max-w-xs">
-                      {selected.image_path || 'No image path recorded'}
-                    </p>
-                    <p className="text-xs text-gray-600 mt-1">
-                      {selected.disease_label === 'healthy'
-                        ? '✅ Tree appears healthy'
-                        : '⚠️ Disease indicators detected'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          ) : (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
-              <Microscope size={48} className="text-gray-700 mx-auto mb-3" />
-              <p className="text-gray-400">Select a detection to view details</p>
-            </div>
-          )}
-        </div>
+      {/* Footer */}
+      <div className="mt-4 flex items-center justify-between px-1">
+        <span className="text-[9px] uppercase tracking-widest text-zinc-700">
+          AI_ANALYTICS v1.3 // YOLOv8n // ONNX RUNTIME 1.17
+        </span>
+        <span className="text-[9px] uppercase tracking-widest text-zinc-700">
+          MODEL: ganoderma_v3.pt // mAP@0.5: 0.914 // CLASSES: 4
+        </span>
       </div>
     </div>
-  )
+  );
 }

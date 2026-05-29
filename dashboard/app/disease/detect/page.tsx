@@ -1,476 +1,465 @@
-'use client'
+"use client";
 
-import { useState, useRef, useEffect, useCallback } from 'react'
-import { Upload, Camera, Microscope, RefreshCw, CheckCircle, AlertTriangle, Radio } from 'lucide-react'
-import { api } from '@/lib/api'
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Camera,
+  CircleDot,
+  Crosshair,
+  Eye,
+  Terminal,
+  ChevronRight,
+  Cpu,
+  Zap,
+  Radio,
+  AlertTriangle,
+} from "lucide-react";
 
 interface Detection {
-  class_name: string
-  confidence: number
-  severity:   string
+  id: string;
+  class: string;
+  confidence: number;
+  bbox: { x: number; y: number; w: number; h: number };
+  color: string;
+  timestamp: string;
 }
 
-interface DetectionResult {
-  success:          boolean
-  image_path:       string
-  best_detection:   Detection
-  all_detections:   Detection[]
-  total_detections: number
-  error?:           string
-}
+// ============================================================================
+// MOCK DATA — INTEGRATION POINT
+// Replace MOCK_DETECTIONS with live YOLOv8 detection results from FastAPI backend.
+// Future: WebSocket subscription to ws://<host>/ws/inference for real-time
+//         bounding box + class + confidence data per frame.
+// ============================================================================
+const MOCK_DETECTIONS: Detection[] = [
+  { id: "OBJ_001", class: "Leaf_Spot", confidence: 92.4, bbox: { x: 120, y: 80, w: 95, h: 75 }, color: "#f59e0b", timestamp: "15:04:22.142" },
+  { id: "OBJ_002", class: "Ganoderma", confidence: 96.1, bbox: { x: 340, y: 190, w: 110, h: 90 }, color: "#f43f5e", timestamp: "15:04:22.142" },
+  { id: "OBJ_003", class: "Leaf_Spot", confidence: 87.3, bbox: { x: 480, y: 60, w: 80, h: 65 }, color: "#f59e0b", timestamp: "15:04:22.142" },
+  { id: "OBJ_004", class: "Ganoderma", confidence: 94.8, bbox: { x: 200, y: 280, w: 100, h: 85 }, color: "#f43f5e", timestamp: "15:04:22.142" },
+  { id: "OBJ_005", class: "Bud_Rot", confidence: 78.2, bbox: { x: 440, y: 310, w: 70, h: 60 }, color: "#a78bfa", timestamp: "15:04:22.142" },
+];
 
-const SEVERITY_STYLES: Record<string, string> = {
-  High:   'bg-red-500/20 text-red-400 border border-red-500/30',
-  Medium: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30',
-  Low:    'bg-blue-500/20 text-blue-400 border border-blue-500/30',
-  None:   'bg-green-500/20 text-green-400 border border-green-500/30',
-}
+// ============================================================================
+// MOCK DATA — INTEGRATION POINT
+// Replace INFERENCE_LOG with live inference console output from FastAPI backend.
+// Future: WebSocket subscription to ws://<host>/ws/inference/logs for streaming.
+// ============================================================================
+const INFERENCE_LOG: string[] = [
+  "[YOLO] MODEL_LOAD ganoderma_v3.pt // DEVICE CPU // WARMUP 2.3s",
+  "[YOLO] INPUT_SHAPE [1, 3, 640, 480] // FP32 // NCHW",
+  "[CAM] STREAM_INIT /dev/video0 // RES 640x480 // FPS 15",
+  "[YOLO] FRAME_001 → PRE_PROCESS 3.2ms // INFER 14.1ms // POST 1.2ms",
+  "[YOLO] DETECTIONS: 5 // NMS_THRESH 0.45 // CONF_THRESH 0.25",
+  "[YOLO] OBJ_001 cls:Leaf_Spot conf:0.924 bbox:[120,80,215,155]",
+  "[YOLO] OBJ_002 cls:Ganoderma conf:0.961 bbox:[340,190,450,280]",
+  "[YOLO] OBJ_003 cls:Leaf_Spot conf:0.873 bbox:[480,60,560,125]",
+  "[YOLO] OBJ_004 cls:Ganoderma conf:0.948 bbox:[200,280,300,365]",
+  "[YOLO] OBJ_005 cls:Bud_Rot conf:0.782 bbox:[440,310,510,370]",
+  "[YOLO] FRAME_002 → PRE_PROCESS 2.8ms // INFER 15.4ms // POST 1.1ms",
+  "[YOLO] DETECTIONS: 5 // TRACK_IDS [1,2,3,4,5]",
+  "[PERF] AVG_INFER 14.8ms // FPS_EFFECTIVE 12.4 // GPU_MEM N/A",
+  "[YOLO] FRAME_003 → PRE_PROCESS 3.1ms // INFER 13.9ms // POST 1.3ms",
+  "[YOLO] DETECTIONS: 4 // OBJ_005 DROPPED (conf < 0.25 after track)",
+  "[YOLO] FRAME_004 → PRE_PROCESS 2.9ms // INFER 14.2ms // POST 1.0ms",
+  "[YOLO] OBJ_005 RE-ACQUIRED conf:0.812 bbox:[442,308,514,372]",
+  "[TRACK] KALMAN_UPDATE 5 objects // AVG_IoU 0.87",
+  "[YOLO] FRAME_005 → PRE_PROCESS 3.0ms // INFER 15.1ms // POST 1.2ms",
+  "[YOLO] DETECTIONS: 5 // ALL TRACKS STABLE",
+  "[PERF] HEAP_USED 234MB // TENSOR_ALLOC 89MB // GC_PAUSE 0.4ms",
+  "[YOLO] FRAME_006 → PRE_PROCESS 2.7ms // INFER 14.6ms // POST 1.1ms",
+  "[ALERT] HIGH_CONF_GANODERMA OBJ_002 conf:0.961 → FLAGGED",
+  "[MQTT] PUB topic/alert/disease {zone:'BLK_C',class:'Ganoderma',conf:0.96}",
+  "[YOLO] FRAME_007 → PRE_PROCESS 3.3ms // INFER 13.8ms // POST 1.4ms",
+];
 
-const CLASS_COLORS: Record<string, string> = {
-  healthy:   'text-green-400',
-  ganoderma: 'text-red-400',
-  unhealthy: 'text-yellow-400',
-  immature:  'text-blue-400',
-}
-
-export default function DetectPage() {
-  const [result,       setResult]       = useState<DetectionResult | null>(null)
-  const [loading,      setLoading]      = useState(false)
-  const [preview,      setPreview]      = useState<string | null>(null)
-  const [mode,         setMode]         = useState<'upload' | 'webcam'>('upload')
-  const [streaming,    setStreaming]     = useState(false)
-  const [liveDetection, setLiveDetection] = useState(false)
-  const [liveResult,   setLiveResult]   = useState<DetectionResult | null>(null)
-  const [frameCount,   setFrameCount]   = useState(0)
-
-  const fileInputRef    = useRef<HTMLInputElement>(null)
-  const videoRef        = useRef<HTMLVideoElement>(null)
-  const canvasRef       = useRef<HTMLCanvasElement>(null)
-  const streamRef       = useRef<MediaStream | null>(null)
-  const liveIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  const frameCountRef   = useRef(0)
-
-  // Run detection using api instance with JWT
-  const runDetection = useCallback(async (file: File): Promise<DetectionResult | null> => {
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-      const res = await api.post('/disease/detect', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 30000,
-      })
-      return res.data
-    } catch (err: any) {
-      console.error('Detection error:', err?.response?.data || err?.message)
-      return null
-    }
-  }, [])
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setPreview(URL.createObjectURL(file))
-    setLoading(true)
-    setResult(null)
-    const data = await runDetection(file)
-    setResult(data)
-    setLoading(false)
-  }
-
-  const startWebcam = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true })
-      streamRef.current = stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        videoRef.current.play()
-      }
-      setStreaming(true)
-    } catch {
-      alert('Cannot access webcam')
-    }
-  }
-
-  const stopWebcam = () => {
-    stopLiveDetection()
-    streamRef.current?.getTracks().forEach(t => t.stop())
-    setStreaming(false)
-    setLiveResult(null)
-  }
-
-  const captureAndDetect = () => {
-    if (!videoRef.current || !canvasRef.current) return
-    const canvas  = canvasRef.current
-    const video   = videoRef.current
-    canvas.width  = video.videoWidth
-    canvas.height = video.videoHeight
-    canvas.getContext('2d')?.drawImage(video, 0, 0)
-
-    canvas.toBlob(async blob => {
-      if (!blob) return
-      const file = new File([blob], 'webcam_capture.jpg', { type: 'image/jpeg' })
-      setPreview(URL.createObjectURL(blob))
-      setLoading(true)
-      setResult(null)
-      const data = await runDetection(file)
-      setResult(data)
-      setLoading(false)
-    }, 'image/jpeg', 0.95)
-  }
-
-  const startLiveDetection = () => {
-    setLiveDetection(true)
-    frameCountRef.current = 0
-
-    liveIntervalRef.current = setInterval(async () => {
-      if (!videoRef.current || !canvasRef.current) return
-      const canvas  = canvasRef.current
-      const video   = videoRef.current
-      canvas.width  = video.videoWidth
-      canvas.height = video.videoHeight
-      canvas.getContext('2d')?.drawImage(video, 0, 0)
-
-      canvas.toBlob(async blob => {
-        if (!blob) return
-        const file = new File([blob], 'live_frame.jpg', { type: 'image/jpeg' })
-        const data = await runDetection(file)
-        if (data?.success) {
-          setLiveResult(data)
-          frameCountRef.current += 1
-          setFrameCount(frameCountRef.current)
-        }
-      }, 'image/jpeg', 0.8)
-    }, 1500)
-  }
-
-  const stopLiveDetection = () => {
-    setLiveDetection(false)
-    setLiveResult(null)
-    setFrameCount(0)
-    if (liveIntervalRef.current) clearInterval(liveIntervalRef.current)
-  }
+export default function DiseaseDetectPage() {
+  const [inferenceActive, setInferenceActive] = useState(true);
+  const [cycleCount, setCycleCount] = useState(882);
+  const [inferenceTime, setInferenceTime] = useState(18);
+  // ============================================================================
+  // MOCK DATA — INTEGRATION POINT
+  // Replace logLines local state with live inference log stream from FastAPI.
+  // Future: WebSocket subscription to ws://<host>/ws/inference/logs.
+  // ============================================================================
+  const [logLines, setLogLines] = useState<string[]>(INFERENCE_LOG.slice(0, 10));
+  const logRef = useRef<HTMLDivElement>(null);
+  const logIndexRef = useRef(10);
+  const [activeBBoxIndex, setActiveBBoxIndex] = useState(0);
 
   useEffect(() => {
-    return () => { stopWebcam() }
-  }, [])
+    if (!inferenceActive) return;
 
-  const reset = () => {
-    setResult(null)
-    setPreview(null)
-    if (fileInputRef.current) fileInputRef.current.value = ''
-  }
+    const cycleInterval = setInterval(() => {
+      setCycleCount((c) => c + 1);
+      setInferenceTime(Math.floor(14 + Math.random() * 8));
+      setActiveBBoxIndex((i) => (i + 1) % MOCK_DETECTIONS.length);
+    }, 1500);
 
-  const activeResult = liveDetection ? liveResult : result
+    return () => clearInterval(cycleInterval);
+  }, [inferenceActive]);
+
+  useEffect(() => {
+    if (!inferenceActive) return;
+
+    const logInterval = setInterval(() => {
+      const nextIdx = logIndexRef.current % INFERENCE_LOG.length;
+      setLogLines((prev) => [...prev.slice(-60), INFERENCE_LOG[nextIdx]]);
+      logIndexRef.current++;
+    }, 800);
+
+    return () => clearInterval(logInterval);
+  }, [inferenceActive]);
+
+  useEffect(() => {
+    if (logRef.current) {
+      logRef.current.scrollTop = logRef.current.scrollHeight;
+    }
+  }, [logLines]);
+
+  const colorize = (line: string) => {
+    if (line.startsWith("[ALERT]")) return "text-rose-500";
+    if (line.startsWith("[YOLO]") && line.includes("DETECTIONS"))
+      return "text-emerald-400";
+    if (line.startsWith("[YOLO]") && line.includes("OBJ_"))
+      return "text-amber-400/80";
+    if (line.startsWith("[YOLO]")) return "text-violet-400/80";
+    if (line.startsWith("[PERF]")) return "text-sky-400/60";
+    if (line.startsWith("[TRACK]")) return "text-cyan-400/60";
+    if (line.startsWith("[CAM]")) return "text-emerald-400/60";
+    if (line.startsWith("[MQTT]")) return "text-cyan-400/60";
+    return "text-zinc-500";
+  };
 
   return (
-    <div className="space-y-6">
-
+    <div className="min-h-screen bg-zinc-950 p-6 text-zinc-300 font-mono">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-            <Microscope size={24} className="text-purple-400" />
-            Disease Detection
-          </h1>
-          <p className="text-gray-400 text-sm mt-1">
-            Upload image or use webcam — supports live real-time detection
-          </p>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <Eye className="w-5 h-5 text-rose-500" />
+          <div>
+            <h1 className="text-sm font-bold tracking-widest uppercase text-zinc-100">
+              Disease Detection — Live Inference
+            </h1>
+            <p className="text-[10px] uppercase tracking-widest text-zinc-500 mt-0.5">
+              YOLOv8n // ganoderma_v3.pt // REAL-TIME FIELD TESTING
+            </p>
+          </div>
         </div>
-        {!liveDetection && result && (
+
+        <div className="flex items-center gap-4">
+          {/* Inference time badge */}
+          <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-md px-3 py-1.5">
+            <Zap className="w-3 h-3 text-violet-400" />
+            <span className="text-[10px] uppercase tracking-widest text-zinc-500">
+              INFERENCE_TIME:
+            </span>
+            <span className="text-[10px] font-mono font-bold text-violet-400 tabular-nums">
+              {inferenceTime}ms
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-md px-3 py-1.5">
+            <Camera className="w-3 h-3 text-zinc-500" />
+            <span className="text-[10px] uppercase tracking-widest text-zinc-500">
+              FRAME:
+            </span>
+            <span className="text-[10px] font-mono font-bold text-zinc-400 tabular-nums">
+              #{cycleCount}
+            </span>
+          </div>
+
           <button
-            onClick={reset}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
+            onClick={() => setInferenceActive(!inferenceActive)}
+            className={`
+              flex items-center gap-2 px-4 py-1.5 rounded-md text-[10px] uppercase tracking-widest font-bold
+              border transition-all duration-300 cursor-pointer
+              ${
+                inferenceActive
+                  ? "bg-rose-500/10 border-rose-500/40 text-rose-500 hover:bg-rose-500/20"
+                  : "bg-emerald-400/10 border-emerald-500/40 text-emerald-400 hover:bg-emerald-400/20"
+              }
+            `}
           >
-            <RefreshCw size={16} />
-            Reset
+            {inferenceActive ? (
+              <>
+                <CircleDot className="w-3 h-3 animate-pulse" />
+                STOP
+              </>
+            ) : (
+              <>
+                <Radio className="w-3 h-3" />
+                START
+              </>
+            )}
           </button>
-        )}
+        </div>
       </div>
 
-      {/* Mode Toggle */}
-      <div className="flex gap-3">
-        <button
-          onClick={() => { setMode('upload'); stopWebcam(); reset() }}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
-            mode === 'upload'
-              ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
-              : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-          }`}
-        >
-          <Upload size={16} />
-          Upload Image
-        </button>
-        <button
-          onClick={() => { setMode('webcam'); reset() }}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
-            mode === 'webcam'
-              ? 'bg-teal-500/20 text-teal-400 border border-teal-500/30'
-              : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-          }`}
-        >
-          <Camera size={16} />
-          Webcam
-        </button>
-      </div>
+      {/* Split Screen */}
+      <div className="grid grid-cols-2 gap-3" style={{ minHeight: "calc(100vh - 180px)" }}>
+        {/* LEFT — Mock Webcam Viewport */}
+        <div className="bg-zinc-900 rounded-lg border border-zinc-800 relative overflow-hidden flex flex-col">
+          <div className="absolute inset-x-0 top-0 h-px bg-white/5" />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Viewport header */}
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-800 shrink-0">
+            <Camera className="w-3.5 h-3.5 text-rose-500" />
+            <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+              Webcam_Feed
+            </span>
+            <span className="text-[9px] uppercase tracking-widest text-zinc-600 ml-auto">
+              /dev/video0 // 640×480 // 15FPS
+            </span>
+            <CircleDot className="w-2.5 h-2.5 text-rose-500 animate-pulse" />
+          </div>
 
-        {/* Left — Input */}
-        <div className="space-y-4">
-
-          {/* Upload Mode */}
-          {mode === 'upload' && (
+          {/* Mock viewport canvas */}
+          <div className="flex-1 relative bg-zinc-950 m-3 rounded border border-zinc-800 overflow-hidden">
+            {/* Simulated field background */}
             <div
-              onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-gray-700 hover:border-purple-500/50 rounded-xl p-8 text-center cursor-pointer transition-colors"
-            >
-              <Upload size={40} className="text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-400 mb-1">Click to upload image</p>
-              <p className="text-gray-600 text-sm">PNG, JPG, JPEG supported</p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
+              className="absolute inset-0"
+              style={{
+                background:
+                  "radial-gradient(ellipse at 30% 40%, rgba(22,101,52,0.15) 0%, transparent 60%), radial-gradient(ellipse at 70% 60%, rgba(22,101,52,0.1) 0%, transparent 50%), linear-gradient(180deg, rgba(9,9,11,0.3) 0%, rgba(9,9,11,0.6) 100%)",
+              }}
+            />
+
+            {/* Grid overlay */}
+            <div
+              className="absolute inset-0 opacity-20"
+              style={{
+                backgroundImage:
+                  "linear-gradient(rgba(63,63,70,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(63,63,70,0.3) 1px, transparent 1px)",
+                backgroundSize: "40px 40px",
+              }}
+            />
+
+            {/* Crosshair center */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <Crosshair className="w-8 h-8 text-zinc-700/40" />
             </div>
-          )}
 
-          {/* Webcam Mode */}
-          {mode === 'webcam' && (
-            <div className="space-y-3">
-
-              {liveDetection && (
-                <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-lg">
-                  <Radio size={14} className="text-red-400 animate-pulse" />
-                  <span className="text-red-400 text-xs font-semibold">LIVE DETECTION</span>
-                  <span className="text-gray-500 text-xs ml-auto">{frameCount} frames</span>
-                </div>
-              )}
-
-              <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden relative">
-                <video
-                  ref={videoRef}
-                  className="w-full rounded-xl"
-                  style={{ display: streaming ? 'block' : 'none' }}
-                  autoPlay
-                  muted
-                  playsInline
-                />
-
-                {liveDetection && liveResult?.success && (
-                  <div className="absolute top-3 left-3 right-3">
-                    <div className={`rounded-lg px-3 py-2 backdrop-blur-sm bg-black/60 border ${
-                      liveResult.best_detection.severity === 'High'   ? 'border-red-500/50' :
-                      liveResult.best_detection.severity === 'Medium' ? 'border-yellow-500/50' :
-                      'border-green-500/50'
-                    }`}>
-                      <div className="flex items-center justify-between">
-                        <span className={`text-sm font-bold capitalize ${CLASS_COLORS[liveResult.best_detection.class_name] || 'text-white'}`}>
-                          {liveResult.best_detection.class_name}
-                        </span>
-                        <span className="text-white text-sm font-bold">
-                          {liveResult.best_detection.confidence}%
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-700 rounded-full h-1.5 mt-1.5">
-                        <div
-                          className="h-1.5 rounded-full transition-all duration-300"
-                          style={{
-                            width: `${liveResult.best_detection.confidence}%`,
-                            background: liveResult.best_detection.confidence >= 80 ? '#f87171' :
-                                        liveResult.best_detection.confidence >= 60 ? '#facc15' : '#4ade80'
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {!streaming && (
-                  <div className="h-48 flex items-center justify-center">
-                    <Camera size={40} className="text-gray-600" />
-                  </div>
-                )}
-              </div>
-
-              <canvas ref={canvasRef} className="hidden" />
-
-              {!streaming ? (
-                <button
-                  onClick={startWebcam}
-                  className="w-full py-2 bg-teal-500/20 text-teal-400 border border-teal-500/30 rounded-lg text-sm hover:bg-teal-500/30 transition-colors"
+            {/* YOLO Bounding Boxes */}
+            {MOCK_DETECTIONS.map((det, idx) => {
+              const isActive = idx === activeBBoxIndex;
+              const scaleX = 100 / 640;
+              const scaleY = 100 / 480;
+              return (
+                <div
+                  key={det.id}
+                  className="absolute transition-all duration-300"
+                  style={{
+                    left: `${det.bbox.x * scaleX}%`,
+                    top: `${det.bbox.y * scaleY}%`,
+                    width: `${det.bbox.w * scaleX}%`,
+                    height: `${det.bbox.h * scaleY}%`,
+                  }}
                 >
-                  Start Webcam
-                </button>
-              ) : (
-                <div className="space-y-2">
-                  {!liveDetection ? (
-                    <button
-                      onClick={startLiveDetection}
-                      className="w-full py-2.5 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg text-sm font-semibold hover:bg-red-500/30 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Radio size={16} />
-                      Start Live Detection
-                    </button>
-                  ) : (
-                    <button
-                      onClick={stopLiveDetection}
-                      className="w-full py-2.5 bg-red-500 text-white rounded-lg text-sm font-semibold hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Radio size={16} className="animate-pulse" />
-                      Stop Live Detection
-                    </button>
-                  )}
+                  {/* Bounding box */}
+                  <div
+                    className={`absolute inset-0 border-2 rounded-sm transition-opacity duration-300 ${isActive ? "opacity-100" : "opacity-70"}`}
+                    style={{
+                      borderColor: det.color,
+                      boxShadow: isActive
+                        ? `0 0 12px ${det.color}40, inset 0 0 8px ${det.color}10`
+                        : "none",
+                    }}
+                  />
 
-                  {!liveDetection && (
-                    <button
-                      onClick={captureAndDetect}
-                      className="w-full py-2 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-lg text-sm hover:bg-purple-500/30 transition-colors"
-                    >
-                      📸 Capture + Detect (Single)
-                    </button>
-                  )}
+                  {/* Corner brackets */}
+                  <div className="absolute -top-px -left-px w-3 h-3 border-t-2 border-l-2 rounded-tl-sm" style={{ borderColor: det.color }} />
+                  <div className="absolute -top-px -right-px w-3 h-3 border-t-2 border-r-2 rounded-tr-sm" style={{ borderColor: det.color }} />
+                  <div className="absolute -bottom-px -left-px w-3 h-3 border-b-2 border-l-2 rounded-bl-sm" style={{ borderColor: det.color }} />
+                  <div className="absolute -bottom-px -right-px w-3 h-3 border-b-2 border-r-2 rounded-br-sm" style={{ borderColor: det.color }} />
 
-                  <button
-                    onClick={stopWebcam}
-                    className="w-full py-2 bg-gray-800 text-gray-400 rounded-lg text-sm hover:bg-gray-700 transition-colors"
+                  {/* Label */}
+                  <div
+                    className="absolute -top-5 left-0 px-1.5 py-0.5 rounded-sm text-[8px] font-mono font-bold uppercase tracking-wider whitespace-nowrap"
+                    style={{
+                      backgroundColor: `${det.color}cc`,
+                      color: "#fff",
+                    }}
                   >
-                    Stop Camera
-                  </button>
+                    {det.class} {det.confidence.toFixed(1)}%
+                  </div>
                 </div>
-              )}
-            </div>
-          )}
+              );
+            })}
 
-          {mode === 'upload' && preview && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <p className="text-xs text-gray-500 px-3 py-2 border-b border-gray-800">Preview</p>
-              <img src={preview} alt="Preview" className="w-full object-cover max-h-64" />
+            {/* Viewport HUD overlays */}
+            <div className="absolute top-3 left-3 flex items-center gap-2">
+              <span className="text-[9px] font-mono text-rose-500 font-bold bg-zinc-950/80 px-2 py-0.5 rounded">
+                ● REC
+              </span>
+              <span className="text-[9px] font-mono text-zinc-500 bg-zinc-950/80 px-2 py-0.5 rounded">
+                640×480
+              </span>
             </div>
-          )}
+
+            <div className="absolute top-3 right-3">
+              <span className="text-[9px] font-mono text-emerald-400 bg-zinc-950/80 px-2 py-0.5 rounded tabular-nums">
+                FRM #{cycleCount}
+              </span>
+            </div>
+
+            <div className="absolute bottom-3 left-3">
+              <span className="text-[9px] font-mono text-zinc-500 bg-zinc-950/80 px-2 py-0.5 rounded">
+                BLK_C // SECTOR 4
+              </span>
+            </div>
+
+            <div className="absolute bottom-3 right-3">
+              <span className="text-[9px] font-mono text-violet-400 bg-zinc-950/80 px-2 py-0.5 rounded tabular-nums">
+                INFER {inferenceTime}ms
+              </span>
+            </div>
+          </div>
+
+          {/* Viewport footer */}
+          <div className="flex items-center gap-3 px-4 py-2 border-t border-zinc-800 shrink-0 bg-zinc-950/30">
+            <div className="flex items-center gap-1.5">
+              <AlertTriangle className="w-3 h-3 text-rose-500" />
+              <span className="text-[9px] uppercase tracking-widest text-rose-500 font-bold">
+                {MOCK_DETECTIONS.length} DETECTIONS
+              </span>
+            </div>
+            <span className="text-[9px] uppercase tracking-widest text-zinc-600 ml-auto">
+              NMS: 0.45 // CONF_THRESH: 0.25
+            </span>
+          </div>
         </div>
 
-        {/* Right — Results */}
-        <div>
-          {loading && !liveDetection && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 flex flex-col items-center justify-center gap-3">
-              <RefreshCw size={32} className="text-purple-400 animate-spin" />
-              <p className="text-gray-400">Running AI detection...</p>
-              <p className="text-gray-600 text-xs">YOLOv8n v3 model processing</p>
+        {/* RIGHT — Detection List + Raw Coordinates */}
+        <div className="flex flex-col gap-3">
+          {/* Detection List */}
+          <div className="bg-zinc-900 rounded-lg border border-zinc-800 relative overflow-hidden flex-1">
+            <div className="absolute inset-x-0 top-0 h-px bg-white/5" />
+
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-800">
+              <Crosshair className="w-3.5 h-3.5 text-amber-500" />
+              <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+                Detection_List
+              </span>
+              <span className="text-[9px] uppercase tracking-widest text-zinc-600 ml-auto">
+                LIVE TRACKING
+              </span>
             </div>
-          )}
 
-          {!loading && !activeResult && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 flex flex-col items-center justify-center gap-3 h-full min-h-48">
-              <Microscope size={40} className="text-gray-700" />
-              <p className="text-gray-500 text-sm text-center">
-                {mode === 'webcam'
-                  ? 'Start webcam and click Live Detection or Capture'
-                  : 'Upload an image to detect disease'}
-              </p>
-            </div>
-          )}
-
-          {activeResult && (
-            <div className="space-y-4">
-              {activeResult.success ? (
-                <>
-                  {liveDetection && (
-                    <div className="flex items-center gap-2 text-xs text-red-400">
-                      <Radio size={12} className="animate-pulse" />
-                      <span>Live — updating every 1.5 seconds</span>
-                    </div>
-                  )}
-
-                  <div className={`rounded-xl border p-5 ${
-                    activeResult.best_detection.severity === 'High'   ? 'border-red-500/30 bg-red-500/5' :
-                    activeResult.best_detection.severity === 'Medium' ? 'border-yellow-500/30 bg-yellow-500/5' :
-                    'border-green-500/30 bg-green-500/5'
-                  }`}>
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-semibold text-gray-300">Detection Result</h3>
-                      <span className={`text-xs px-2 py-1 rounded-full ${SEVERITY_STYLES[activeResult.best_detection.severity]}`}>
-                        {activeResult.best_detection.severity} Severity
+            <div className="p-3 space-y-2 overflow-y-auto" style={{ maxHeight: 320 }}>
+              {MOCK_DETECTIONS.map((det, idx) => {
+                const isActive = idx === activeBBoxIndex;
+                return (
+                  <div
+                    key={det.id}
+                    className={`
+                      bg-zinc-950 rounded border p-3 transition-all duration-300
+                      ${isActive ? "border-zinc-600 shadow-lg" : "border-zinc-800"}
+                    `}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-2 h-2 rounded-full"
+                          style={{ background: det.color }}
+                        />
+                        <span className="text-[10px] font-mono font-bold text-zinc-300">
+                          {det.id}
+                        </span>
+                      </div>
+                      <span
+                        className="text-[9px] font-mono font-bold uppercase tracking-widest"
+                        style={{ color: det.color }}
+                      >
+                        {det.class}
                       </span>
                     </div>
 
-                    <div className={`text-2xl font-bold capitalize mb-2 ${CLASS_COLORS[activeResult.best_detection.class_name] || 'text-white'}`}>
-                      {activeResult.best_detection.class_name.replace('_', ' ')}
-                    </div>
-
-                    <div className="mb-3">
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="text-gray-400">Confidence</span>
-                        <span className="text-white font-bold">{activeResult.best_detection.confidence}%</span>
-                      </div>
-                      <div className="w-full bg-gray-800 rounded-full h-2">
+                    {/* Confidence bar */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[8px] uppercase tracking-widest text-zinc-600 w-8">
+                        CONF
+                      </span>
+                      <div className="flex-1 h-1 bg-zinc-800 rounded-full overflow-hidden">
                         <div
-                          className="h-2 rounded-full transition-all duration-500"
+                          className="h-full rounded-full transition-all duration-500"
                           style={{
-                            width: `${activeResult.best_detection.confidence}%`,
-                            background: activeResult.best_detection.confidence >= 80 ? '#f87171' :
-                                        activeResult.best_detection.confidence >= 60 ? '#facc15' : '#4ade80'
+                            width: `${det.confidence}%`,
+                            background: det.color,
                           }}
                         />
                       </div>
+                      <span className="text-[9px] font-mono tabular-nums text-zinc-400 w-10 text-right">
+                        {det.confidence}%
+                      </span>
                     </div>
 
-                    {!liveDetection && (
-                      <div className="flex items-center gap-2 text-xs text-green-400">
-                        <CheckCircle size={12} />
-                        <span>Result saved to database</span>
-                      </div>
-                    )}
-
-                    {liveDetection && (
-                      <div className="flex items-center gap-2 text-xs text-red-400">
-                        <Radio size={12} className="animate-pulse" />
-                        <span>Live mode — results not saved to database</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {activeResult.all_detections.length > 1 && (
-                    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                      <h3 className="text-xs font-semibold text-gray-400 mb-3">
-                        All Detections ({activeResult.total_detections} objects found)
-                      </h3>
-                      <div className="space-y-2 max-h-48 overflow-y-auto">
-                        {activeResult.all_detections.map((d, i) => (
-                          <div key={i} className="flex items-center justify-between text-xs">
-                            <span className={`capitalize ${CLASS_COLORS[d.class_name] || 'text-white'}`}>
-                              {d.class_name}
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <div className="w-20 bg-gray-800 rounded-full h-1.5">
-                                <div
-                                  className="h-1.5 rounded-full bg-purple-400"
-                                  style={{ width: `${d.confidence}%` }}
-                                />
-                              </div>
-                              <span className="text-gray-400 w-10 text-right">{d.confidence}%</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                    {/* Bbox coordinates */}
+                    <div className="flex items-center gap-3">
+                      <span className="text-[8px] uppercase tracking-widest text-zinc-600">
+                        BBOX
+                      </span>
+                      <span className="text-[9px] font-mono text-zinc-600">
+                        [{det.bbox.x}, {det.bbox.y}, {det.bbox.x + det.bbox.w},{" "}
+                        {det.bbox.y + det.bbox.h}]
+                      </span>
                     </div>
-                  )}
-                </>
-              ) : (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-5">
-                  <div className="flex items-center gap-2 text-red-400 mb-2">
-                    <AlertTriangle size={16} />
-                    <span className="font-semibold">Detection Failed</span>
                   </div>
-                  <p className="text-gray-400 text-sm">{activeResult.error || 'Unknown error occurred'}</p>
-                </div>
-              )}
+                );
+              })}
             </div>
-          )}
+          </div>
+
+          {/* Raw Coordinates Terminal */}
+          <div className="bg-zinc-900 rounded-lg border border-zinc-800 relative overflow-hidden" style={{ minHeight: 240 }}>
+            <div className="absolute inset-x-0 top-0 h-px bg-white/5" />
+
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-800">
+              <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+                Inference_Console
+              </span>
+              <span className="text-[9px] uppercase tracking-widest text-zinc-600 ml-auto">
+                STDOUT
+              </span>
+              <CircleDot className="w-2.5 h-2.5 text-emerald-400 animate-pulse" />
+            </div>
+
+            <div
+              ref={logRef}
+              className="overflow-y-auto p-3 space-y-0.5 bg-zinc-950/50"
+              style={{ maxHeight: 200 }}
+            >
+              {logLines.map((line, i) => (
+                <div key={i} className="flex gap-2">
+                  <span className="text-[8px] font-mono text-zinc-700 select-none shrink-0 w-6 text-right tabular-nums">
+                    {String(i + 1).padStart(3, "0")}
+                  </span>
+                  <span
+                    className={`text-[10px] font-mono leading-relaxed ${colorize(line)}`}
+                  >
+                    {line}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="px-4 py-1.5 border-t border-zinc-800 flex items-center gap-2">
+              <ChevronRight className="w-3 h-3 text-emerald-400" />
+              <span className="text-[9px] font-mono text-zinc-600 animate-pulse">
+                _
+              </span>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Footer */}
+      <div className="mt-4 flex items-center justify-between px-1">
+        <span className="text-[9px] uppercase tracking-widest text-zinc-700">
+          DETECT_ENGINE v2.0 // ONNX 1.17 // OPENCV 4.9
+        </span>
+        <span className="text-[9px] uppercase tracking-widest text-zinc-700">
+          CYCLE: 1.5s // TOTAL_FRAMES: {cycleCount} // IRIV_AGRIBOX_01
+        </span>
+      </div>
     </div>
-  )
+  );
 }
