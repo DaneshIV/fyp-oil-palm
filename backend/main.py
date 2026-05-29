@@ -9,6 +9,7 @@ from backend.database.connection import get_db
 from backend.database.supabase_sync import run_full_sync
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
+from backend.routes.cameras import router as cameras_router
 import asyncio
 import logging
 import os
@@ -79,6 +80,8 @@ app.include_router(alerts.router)
 app.include_router(automation.router)
 app.include_router(security_router.router)
 app.include_router(auth.router)
+app.include_router(cameras_router, prefix="/cameras", tags=["cameras"])
+
 
 @app.get("/")
 def root():
