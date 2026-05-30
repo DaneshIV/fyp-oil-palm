@@ -279,3 +279,86 @@ def get_snapshot(filename: str):
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="Snapshot not found")
     return FileResponse(str(filepath), media_type="image/jpeg")
+
+# ── NEW: Security Live Frame with YOLOv8n COCO bounding boxes ──
+from fastapi.responses import Response as FastAPIResponse
+import cv2
+import threading
+
+@router.get("/live-frame")
+async def get_security_frame(camera_index: str = "0"):
+    """Capture frame, run YOLOv8n COCO, return annotated JPEG"""
+    frame_result = {"frame": None, "error": None}
+
+    def _capture():
+        try:
+            source = int(camera_index) if camera_index.strip().isdigit() else camera_index
+            cap = cv2.VideoCapture(source)
+            if not cap.isOpened():
+                frame_result["error"] = f"Cannot open camera {camera_index}"
+                return
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            for _ in range(2): cap.grab()
+            ret, frame = cap.read()
+            cap.release()
+            if ret and frame is not None:
+                frame_result["frame"] = frame
+            else:
+                frame_result["error"] = "No frame"
+        except Exception as e:
+            frame_result["error"] = str(e)
+
+    t = threading.Thread(target=_capture, daemon=True)
+    t.start()
+    t.join(timeout=5)
+
+    if frame_result["frame"] is None:
+        raise HTTPException(503, f"Camera offline: {frame_result.get('error','timeout')}")
+
+    frame = frame_result["frame"]
+    threat_type = "clear"
+    detections  = []
+
+    try:
+        from ultralytics import YOLO
+        model = YOLO("yolov8n.pt")
+        results = model(frame, conf=0.25, verbose=False)
+
+        PERSON_CLASSES = [0]
+        ANIMAL_CLASSES = [14,15,16,17,18,19,20,21,22,23]
+        COLOR_PERSON   = (94, 63, 244)
+        COLOR_ANIMAL   = (11, 158, 245)
+
+        for r in results:
+            for box in r.boxes:
+                cls_id = int(box.cls[0])
+                conf   = float(box.conf[0])
+                x1,y1,x2,y2 = map(int, box.xyxy[0])
+                if cls_id in PERSON_CLASSES:
+                    label = "person"; color = COLOR_PERSON
+                    threat_type = "person"
+                elif cls_id in ANIMAL_CLASSES:
+                    label = r.names[cls_id]; color = COLOR_ANIMAL
+                    if threat_type != "person": threat_type = "animal"
+                else:
+                    continue
+                cv2.rectangle(frame,(x1,y1),(x2,y2),color,2)
+                txt = f"{label} {conf:.0%}"
+                (tw,th),_ = cv2.getTextSize(txt,cv2.FONT_HERSHEY_SIMPLEX,0.55,1)
+                cv2.rectangle(frame,(x1,y1-th-10),(x1+tw+6,y1),color,-1)
+                cv2.putText(frame,txt,(x1+3,y1-5),cv2.FONT_HERSHEY_SIMPLEX,0.55,(0,0,0),1)
+                detections.append({"label":label,"confidence":round(conf*100,1)})
+
+        overlay = {"person":"!! PERSON DETECTED !!","animal":"ANIMAL DETECTED","clear":"CLEAR"}
+        colors  = {"person":COLOR_PERSON,"animal":COLOR_ANIMAL,"clear":(52,211,153)}
+        cv2.putText(frame,overlay.get(threat_type,"CLEAR"),(10,30),cv2.FONT_HERSHEY_SIMPLEX,0.8,colors.get(threat_type,(200,200,200)),2)
+
+    except Exception as e:
+        print(f"Security inference error: {e}")
+
+    _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    return FastAPIResponse(
+        content=buf.tobytes(), media_type="image/jpeg",
+        headers={"X-Threat-Type": threat_type, "X-Detection-Count": str(len(detections)), "Cache-Control": "no-cache"}
+    )
+
