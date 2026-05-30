@@ -65,7 +65,7 @@ export default function ReportsPage() {
     if (type === "sensors") {
       const headers = "timestamp,temperature,humidity,soil_moisture,ec_level\n";
       const rows = sensorData.map(d =>
-        `${d.timestamp},${d.temperature},${d.humidity},${d.soil_moisture},${d.ec_level}`
+        `${d.timestamp},${d.temperature},${d.humidity},${d.soil_moisture},${d.soil_temperature ?? 0},${d.ec_level}`
       ).join("\n");
       const blob = new Blob([headers + rows], { type: "text/csv" });
       const url  = URL.createObjectURL(blob);

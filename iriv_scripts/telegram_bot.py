@@ -142,7 +142,7 @@ async def notify_relay_activated(relay_name: str, relay_pin: int, reason: str):
         f"⚙️ <b>RELAY ACTIVATED</b>\n\n"
         f"🔌 Device: <b>{relay_name}</b>\n"
         f"📍 Pin: {relay_pin}\n"
-        f"📋 Reason: {reason}\n"
+        f"📋 Reason: {str(reason).replace(chr(60), chr(40)).replace(chr(62), chr(41))}\n"
         f"✅ Status: <b>ON</b>\n\n"
         f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     )
@@ -198,43 +198,60 @@ async def send_system_startup():
 # ── Test Function ────────────────────────────────────────────
 
 async def run_all_tests():
-    """Test all alert types"""
-    print("Testing Telegram bot...")
+    """Test all alert types with REAL sensor values from API"""
+    import httpx
+
+    API_URL    = os.getenv("API_URL",  "https://api.project2030.me")
+    TOKEN_USER = os.getenv("API_USER", "admin")
+    TOKEN_PASS = os.getenv("API_PASS", "fyp2024")
+
+    print("Testing Telegram bot with REAL sensor values...")
+
+    real = {}
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.post(f"{API_URL}/auth/login",
+                json={"username": TOKEN_USER, "password": TOKEN_PASS}, timeout=10)
+            token = r.json().get("access_token")
+            r = await client.get(f"{API_URL}/sensors/latest",
+                headers={"Authorization": f"Bearer {token}"}, timeout=10)
+            real = r.json()
+            print(f"Real: temp={real.get('temperature')}C hum={real.get('humidity')}% soil={real.get('soil_moisture')}% soil_temp={real.get('soil_temperature')}C ec={real.get('ec_level')}mS/cm")
+    except Exception as e:
+        print(f"Could not fetch real data: {e} -- using demo values")
+        real = {"temperature": 30.0, "humidity": 75.0, "soil_moisture": 100.0, "soil_temperature": 28.7, "ec_level": 0.169}
 
     print("1. Sending startup message...")
     await send_system_startup()
     await asyncio.sleep(1)
 
-    print("2. Sending soil moisture alert...")
-    await alert_soil_moisture(28.5)
+    print(f"2. Soil moisture alert (real: {real.get('soil_moisture')}%)...")
+    await alert_soil_moisture(real.get("soil_moisture", 0))
     await asyncio.sleep(1)
 
-    print("3. Sending temperature alert...")
-    await alert_temperature(37.2)
+    print(f"3. Temperature alert (real: {real.get('temperature')}C)...")
+    await alert_temperature(real.get("temperature", 0))
     await asyncio.sleep(1)
 
-    print("4. Sending EC level alert...")
-    await alert_ec_level(0.9)
+    print(f"4. EC level alert (real: {real.get('ec_level')} mS/cm)...")
+    await alert_ec_level(real.get("ec_level", 0))
     await asyncio.sleep(1)
 
-    print("5. Sending disease detection alert...")
-    await alert_disease_detected(
-        disease_label="ganoderma",
-        confidence=87.5,
-        severity="High",
-        tree_id="A-14",
-        block_id="Block-A"
-    )
+    print("5. Disease detection alert...")
+    await alert_disease_detected("ganoderma", 87.5, "High", "A-14", "BLK_A")
     await asyncio.sleep(1)
 
-    print("6. Sending relay activated notification...")
-    await notify_relay_activated("Drip Irrigation", 1, "Soil moisture < 40%")
+    print("6. Relay activated notification...")
+    await notify_relay_activated("Drip Irrigation", 1, "soil_moisture below 40%")
     await asyncio.sleep(1)
 
-    print("7. Sending daily summary...")
-    await send_daily_summary(31.4, 74.2, 52.1, 1.6, 1, 2)
+    print(f"7. Daily summary (real values)...")
+    await send_daily_summary(
+        real.get("temperature", 0), real.get("humidity", 0),
+        real.get("soil_moisture", 0), real.get("ec_level", 0), 1, 2)
 
-    print("\n✅ All tests complete! Check your Telegram.")
-
+    print("\n All tests complete! Check your Telegram.")
 if __name__ == "__main__":
     asyncio.run(run_all_tests())
+
+
