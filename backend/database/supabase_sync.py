@@ -34,7 +34,8 @@ def sync_sensor_readings(db: Session, last_sync: datetime):
             {
                 "temperature": row.temperature,
                 "humidity": row.humidity,
-                "soil_moisture": row.soil_moisture,
+                "soil_moisture":    row.soil_moisture,
+                    "soil_temperature": row.soil_temperature,
                 "ec_level": row.ec_level,
                 "timestamp": row.timestamp.isoformat()
             }
