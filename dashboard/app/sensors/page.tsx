@@ -7,61 +7,160 @@ import {
 } from "recharts";
 import {
   Thermometer, Droplets, Waves, Zap,
-  Clock, CircleDot, RefreshCw, Activity,
+  Wind, Leaf, RefreshCw, Activity, CircleDot,
 } from "lucide-react";
 import { sensorApi } from "@/lib/api";
 
 interface DataPoint { time: string; value: number; }
-interface SensorConfig {
-  id: string; label: string; unit: string;
-  icon: React.ReactNode; color: string;
-  safeMin: number; safeMax: number;
-  warnMin?: number; warnMax?: number;
-  currentValue: number;
-  status: "nominal" | "warning" | "critical";
-  data: DataPoint[];
-}
 
 const RANGES = ["1H", "6H", "24H", "3D"];
 
-const SENSOR_DEFS = [
-  { id: "temperature",   label: "Temperature",        unit: "°C",    color: "#f59e0b", safeMin: 22, safeMax: 35, warnMax: 32, icon: <Thermometer className="w-4 h-4" /> },
-  { id: "humidity",      label: "Rel. Humidity",      unit: "%",     color: "#38bdf8", safeMin: 60, safeMax: 90, warnMin: 65, icon: <Droplets className="w-4 h-4" /> },
-  { id: "soil_moisture", label: "Soil Moisture",      unit: "%",     color: "#34d399", safeMin: 40, safeMax: 80, warnMin: 45, icon: <Waves className="w-4 h-4" /> },
-  { id: "ec_level",      label: "EC Level",           unit: "mS/cm", color: "#a78bfa", safeMin: 1.2, safeMax: 2.5, warnMin: 1.4, icon: <Zap className="w-4 h-4" /> },
+// ── Sensor definitions split into Air and Soil sections
+const AIR_SENSORS = [
+  { id: "temperature",      label: "Air Temperature", unit: "°C",    color: "#f59e0b", icon: Thermometer, safeMin: 22, safeMax: 35, warnHigh: 32, critHigh: 35 },
+  { id: "humidity",         label: "Air Humidity",    unit: "%",     color: "#38bdf8", icon: Wind,        safeMin: 60, safeMax: 90, warnLow: 60,  critLow: 50  },
+];
+
+const SOIL_SENSORS = [
+  { id: "soil_moisture",    label: "Soil Moisture",    unit: "%",     color: "#34d399", icon: Waves,       safeMin: 40, safeMax: 80, warnLow: 40, critLow: 30  },
+  { id: "soil_temperature", label: "Soil Temperature", unit: "°C",    color: "#fb923c", icon: Thermometer, safeMin: 20, safeMax: 35, warnHigh: 32, critHigh: 35 },
+  { id: "ec_level",         label: "EC Level",         unit: "mS/cm", color: "#a78bfa", icon: Zap,         safeMin: 1.2, safeMax: 2.5, warnLow: 1.2, critLow: 1.0 },
 ];
 
 function getStatus(id: string, value: number): "nominal" | "warning" | "critical" {
-  const t: Record<string, { warnLow?: number; critLow?: number; warnHigh?: number; critHigh?: number }> = {
-    temperature:   { warnHigh: 32, critHigh: 35 },
-    humidity:      { warnLow: 60, critLow: 50 },
-    soil_moisture: { warnLow: 40, critLow: 30 },
-    ec_level:      { warnLow: 1.2, critLow: 1.0 },
+  const thresholds: Record<string, { warnLow?: number; critLow?: number; warnHigh?: number; critHigh?: number }> = {
+    temperature:      { warnHigh: 32, critHigh: 35 },
+    humidity:         { warnLow: 60, critLow: 50 },
+    soil_moisture:    { warnLow: 40, critLow: 30 },
+    soil_temperature: { warnHigh: 32, critHigh: 35 },
+    ec_level:         { warnLow: 1.2, critLow: 1.0 },
   };
-  const th = t[id];
-  if (!th) return "nominal";
-  if ((th.critLow !== undefined && value < th.critLow) || (th.critHigh !== undefined && value > th.critHigh)) return "critical";
-  if ((th.warnLow !== undefined && value < th.warnLow) || (th.warnHigh !== undefined && value > th.warnHigh)) return "warning";
+  const t = thresholds[id];
+  if (!t) return "nominal";
+  if ((t.critLow !== undefined && value < t.critLow) || (t.critHigh !== undefined && value > t.critHigh)) return "critical";
+  if ((t.warnLow !== undefined && value < t.warnLow) || (t.warnHigh !== undefined && value > t.warnHigh)) return "warning";
   return "nominal";
 }
 
-const statusColor = (s: string) => s === "nominal" ? "text-emerald-400" : s === "warning" ? "text-amber-500" : "text-rose-500";
+const statusColor  = (s: string) => s === "nominal" ? "text-emerald-400" : s === "warning" ? "text-amber-500" : "text-rose-500";
 const statusBorder = (s: string) => s === "nominal" ? "border-zinc-800" : s === "warning" ? "border-amber-500/30" : "border-rose-500/30";
-const statusBg = (s: string) => s === "nominal" ? "" : s === "warning" ? "bg-amber-500/5" : "bg-rose-500/5";
+const statusBg     = (s: string) => s === "warning" ? "bg-amber-500/5" : s === "critical" ? "bg-rose-500/5" : "";
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-zinc-900 border border-zinc-700 rounded px-3 py-2">
+    <div className="bg-zinc-900 border border-zinc-700 rounded px-3 py-2 font-mono">
       <p className="text-[9px] uppercase tracking-widest text-zinc-500 mb-1">{label}</p>
-      <p className="text-sm font-mono font-bold text-zinc-200">{payload[0]?.value?.toFixed(2)}</p>
+      <p className="text-sm font-bold text-zinc-200">{payload[0]?.value?.toFixed(2)}</p>
     </div>
   );
 };
 
+// ── Single sensor card with chart
+function SensorCard({ def, value, data, range }: {
+  def: typeof AIR_SENSORS[0];
+  value: number;
+  data: DataPoint[];
+  range: string;
+}) {
+  const status = getStatus(def.id, value);
+  const Icon   = def.icon;
+
+  return (
+    <div className={`bg-zinc-900 rounded-lg border ${statusBorder(status)} ${statusBg(status)} overflow-hidden relative`}>
+      {status !== "nominal" && (
+        <div className={`absolute inset-x-0 top-0 h-0.5 ${status === "warning" ? "bg-amber-500" : "bg-rose-500"} animate-pulse`} />
+      )}
+
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/50">
+        <div className="flex items-center gap-2">
+          <div className={`p-1.5 rounded-md ${status === "nominal" ? "bg-zinc-800 text-zinc-500" : status === "warning" ? "bg-amber-500/10 text-amber-500" : "bg-rose-500/10 text-rose-500"}`}>
+            <Icon className="w-3.5 h-3.5" />
+          </div>
+          <div>
+            <p className="text-[9px] uppercase tracking-widest text-zinc-600">{def.id.toUpperCase()}</p>
+            <p className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold">{def.label}</p>
+          </div>
+        </div>
+        <div className="text-right">
+          <p className={`text-2xl font-mono font-bold ${statusColor(status)}`}>{value}</p>
+          <p className="text-[9px] uppercase tracking-widest text-zinc-600">{def.unit}</p>
+        </div>
+      </div>
+
+      {/* Chart */}
+      <div className="px-2 pt-2 pb-1">
+        <ResponsiveContainer width="100%" height={120}>
+          <LineChart data={data} margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(63,63,70,0.3)" />
+            <XAxis dataKey="time" tick={{ fill: "#52525b", fontSize: 8, fontFamily: "monospace" }}
+              tickLine={false} axisLine={false} interval={Math.floor(data.length / 4)} />
+            <YAxis tick={{ fill: "#52525b", fontSize: 8, fontFamily: "monospace" }} tickLine={false} axisLine={false} />
+            <Tooltip content={<CustomTooltip />} />
+            <ReferenceLine y={def.safeMin} stroke="rgba(52,211,153,0.2)" strokeDasharray="4 4" />
+            <ReferenceLine y={def.safeMax} stroke="rgba(52,211,153,0.2)" strokeDasharray="4 4" />
+            <Line type="monotone" dataKey="value" stroke={def.color} strokeWidth={1.5} dot={false} activeDot={{ r: 3, fill: def.color }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Stats footer */}
+      <div className="grid grid-cols-3 divide-x divide-zinc-800 border-t border-zinc-800">
+        {[
+          { label: "CURRENT",  value: `${value}${def.unit}` },
+          { label: "SAFE_MIN", value: `${def.safeMin}${def.unit}` },
+          { label: "SAFE_MAX", value: `${def.safeMax}${def.unit}` },
+        ].map(s => (
+          <div key={s.label} className="px-3 py-2">
+            <p className="text-[8px] uppercase tracking-widest text-zinc-600 mb-0.5">{s.label}</p>
+            <p className={`text-[9px] font-mono font-bold ${s.label === "CURRENT" ? statusColor(status) : "text-zinc-500"}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Section header
+function SectionHeader({ icon, title, subtitle, status }: {
+  icon: React.ReactNode; title: string; subtitle: string; status: "nominal" | "warning" | "critical";
+}) {
+  return (
+    <div className={`flex items-center gap-3 px-4 py-3 rounded-lg border mb-3 ${
+      status === "critical" ? "bg-rose-500/5 border-rose-500/30" :
+      status === "warning"  ? "bg-amber-500/5 border-amber-500/30" :
+      "bg-zinc-900 border-zinc-800"
+    }`}>
+      <div className={`p-2 rounded-md ${
+        status === "critical" ? "bg-rose-500/10 text-rose-500" :
+        status === "warning"  ? "bg-amber-500/10 text-amber-500" :
+        "bg-emerald-400/10 text-emerald-400"
+      }`}>
+        {icon}
+      </div>
+      <div className="flex-1">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-200">{title}</p>
+        <p className="text-[9px] uppercase tracking-widest text-zinc-600 mt-0.5">{subtitle}</p>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className={`w-2 h-2 rounded-full ${
+          status === "critical" ? "bg-rose-500 animate-pulse" :
+          status === "warning"  ? "bg-amber-500 animate-pulse" :
+          "bg-emerald-400"
+        }`} />
+        <span className={`text-[9px] uppercase tracking-widest font-bold ${statusColor(status)}`}>
+          {status.toUpperCase()}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function SensorsPage() {
   const [range, setRange]       = useState("1H");
-  const [sensors, setSensors]   = useState<SensorConfig[]>([]);
+  const [latest, setLatest]     = useState<any>({});
+  const [history, setHistory]   = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -73,40 +172,44 @@ export default function SensorsPage() {
         sensorApi.getLatest(),
         sensorApi.getHistory(hours),
       ]);
-
-      const latest  = latestRes.data;
-      const history = historyRes.data;
-
-      const configs = SENSOR_DEFS.map(def => {
-        const currentValue = latest[def.id] ?? 0;
-        const data: DataPoint[] = history.map((h: any) => ({
-          time:  new Date(h.timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
-          value: h[def.id] ?? 0,
-        }));
-        return {
-          ...def,
-          currentValue,
-          status: getStatus(def.id, currentValue),
-          data: data.slice(-50),
-        };
-      });
-
-      setSensors(configs);
+      setLatest(latestRes.data);
+      setHistory(historyRes.data);
       setLastUpdate(new Date());
-    } catch (e) {
-      console.error("Sensor fetch error:", e);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); setRefreshing(false); }
   }, [range]);
 
-  useEffect(() => { fetchData(); const i = setInterval(fetchData, 30000); return () => clearInterval(i); }, [fetchData]);
+  useEffect(() => {
+    fetchData();
+    const i = setInterval(fetchData, 30000);
+    return () => clearInterval(i);
+  }, [fetchData]);
 
-  const handleRefresh = () => { setRefreshing(true); fetchData(); };
+  const getChartData = (key: string): DataPoint[] =>
+    history.slice(-50).map((h: any) => ({
+      time:  new Date(h.timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+      value: h[key] ?? 0,
+    }));
 
-  const criticalSensors = sensors.filter(s => s.status === "critical");
-  const warningSensors  = sensors.filter(s => s.status === "warning");
+  // Overall section status
+  const airStatus = (["temperature", "humidity"] as const)
+    .map(k => getStatus(k, latest[k] ?? 0))
+    .includes("critical") ? "critical"
+    : (["temperature", "humidity"] as const)
+    .map(k => getStatus(k, latest[k] ?? 0))
+    .includes("warning") ? "warning" : "nominal";
+
+  const soilStatus = (["soil_moisture", "soil_temperature", "ec_level"] as const)
+    .map(k => getStatus(k, latest[k] ?? 0))
+    .includes("critical") ? "critical"
+    : (["soil_moisture", "soil_temperature", "ec_level"] as const)
+    .map(k => getStatus(k, latest[k] ?? 0))
+    .includes("warning") ? "warning" : "nominal";
+
+  // Alert banners
+  const allStatuses = [...AIR_SENSORS, ...SOIL_SENSORS].map(s => getStatus(s.id, latest[s.id] ?? 0));
+  const hasCritical = allStatuses.includes("critical");
+  const hasWarning  = allStatuses.includes("warning");
 
   return (
     <div className="min-h-screen bg-zinc-950 p-6 text-zinc-300 font-mono">
@@ -117,21 +220,21 @@ export default function SensorsPage() {
           <div>
             <h1 className="text-sm font-bold tracking-widest uppercase text-zinc-100">Sensor Matrix</h1>
             <p className="text-[10px] uppercase tracking-widest text-zinc-500 mt-0.5">
-              RS485 MODBUS RTU // SLAVE_1 + SLAVE_5 // {lastUpdate ? `LAST UPDATE: ${lastUpdate.toLocaleTimeString("en-GB")}` : "CONNECTING..."}
+              RS485 MODBUS RTU // AIR: SLAVE_1 // SOIL: SLAVE_5 (SN-3000-ECTH-N01)
+              {lastUpdate && ` // ${lastUpdate.toLocaleTimeString("en-GB")}`}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {/* Range selector */}
           <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-md p-1">
             {RANGES.map(r => (
               <button key={r} onClick={() => setRange(r)}
-                className={`px-3 py-1 rounded text-[9px] uppercase tracking-widest font-bold transition-all cursor-pointer ${range === r ? "bg-emerald-400/10 text-emerald-400 border border-emerald-500/30" : "text-zinc-600 hover:text-zinc-400"}`}>
+                className={`px-3 py-1 rounded text-[9px] uppercase tracking-widest font-bold cursor-pointer transition-all ${range === r ? "bg-emerald-400/10 text-emerald-400 border border-emerald-500/30" : "text-zinc-600 hover:text-zinc-400"}`}>
                 {r}
               </button>
             ))}
           </div>
-          <button onClick={handleRefresh} disabled={refreshing}
+          <button onClick={() => { setRefreshing(true); fetchData(); }} disabled={refreshing}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded text-[9px] uppercase tracking-widest text-zinc-500 hover:text-zinc-300 cursor-pointer">
             <RefreshCw className={`w-3 h-3 ${refreshing ? "animate-spin" : ""}`} /> REFRESH
           </button>
@@ -139,19 +242,19 @@ export default function SensorsPage() {
       </div>
 
       {/* Alert banners */}
-      {criticalSensors.length > 0 && (
+      {hasCritical && (
         <div className="mb-4 bg-rose-500/5 border border-rose-500/30 rounded-lg px-5 py-3 flex items-center gap-3">
           <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
           <span className="text-[10px] uppercase tracking-widest text-rose-500 font-bold">
-            CRITICAL: {criticalSensors.map(s => `${s.label} (${s.currentValue}${s.unit})`).join(" // ")}
+            CRITICAL: {[...AIR_SENSORS, ...SOIL_SENSORS].filter(s => getStatus(s.id, latest[s.id] ?? 0) === "critical").map(s => `${s.label} (${latest[s.id] ?? 0}${s.unit})`).join(" // ")}
           </span>
         </div>
       )}
-      {warningSensors.length > 0 && criticalSensors.length === 0 && (
+      {hasWarning && !hasCritical && (
         <div className="mb-4 bg-amber-500/5 border border-amber-500/30 rounded-lg px-5 py-3 flex items-center gap-3">
           <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
           <span className="text-[10px] uppercase tracking-widest text-amber-500 font-bold">
-            WARNING: {warningSensors.map(s => `${s.label} (${s.currentValue}${s.unit})`).join(" // ")}
+            WARNING: {[...AIR_SENSORS, ...SOIL_SENSORS].filter(s => getStatus(s.id, latest[s.id] ?? 0) === "warning").map(s => `${s.label} (${latest[s.id] ?? 0}${s.unit})`).join(" // ")}
           </span>
         </div>
       )}
@@ -161,69 +264,55 @@ export default function SensorsPage() {
           <RefreshCw className="w-8 h-8 text-zinc-600 animate-spin" />
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4">
-          {sensors.map(sensor => (
-            <div key={sensor.id} className={`bg-zinc-900 rounded-lg border ${statusBorder(sensor.status)} ${statusBg(sensor.status)} relative overflow-hidden`}>
-              <div className="absolute inset-x-0 top-0 h-px bg-white/5" />
-              {sensor.status !== "nominal" && (
-                <div className={`absolute inset-x-0 top-0 h-0.5 ${sensor.status === "warning" ? "bg-amber-500" : "bg-rose-500"} animate-pulse`} />
-              )}
-
-              {/* Header */}
-              <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800/50">
-                <div className="flex items-center gap-2">
-                  <div className={`p-1.5 rounded-md ${sensor.status === "nominal" ? "bg-zinc-800 text-zinc-500" : sensor.status === "warning" ? "bg-amber-500/10 text-amber-500" : "bg-rose-500/10 text-rose-500"}`}>
-                    {sensor.icon}
-                  </div>
-                  <div>
-                    <p className="text-[9px] uppercase tracking-widest text-zinc-600">{sensor.id.toUpperCase()}</p>
-                    <p className="text-[10px] uppercase tracking-widest text-zinc-400 font-bold">{sensor.label}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className={`text-2xl font-mono font-bold ${statusColor(sensor.status)}`}>{sensor.currentValue}</p>
-                  <p className="text-[9px] uppercase tracking-widest text-zinc-600">{sensor.unit}</p>
-                </div>
-              </div>
-
-              {/* Chart */}
-              <div className="px-2 pt-3 pb-2">
-                <ResponsiveContainer width="100%" height={140}>
-                  <LineChart data={sensor.data} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(63,63,70,0.3)" />
-                    <XAxis dataKey="time" tick={{ fill: "#52525b", fontSize: 8, fontFamily: "monospace" }}
-                      tickLine={false} axisLine={false} interval={Math.floor(sensor.data.length / 5)} />
-                    <YAxis tick={{ fill: "#52525b", fontSize: 8, fontFamily: "monospace" }} tickLine={false} axisLine={false} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <ReferenceLine y={sensor.safeMin} stroke="rgba(52,211,153,0.2)" strokeDasharray="4 4" />
-                    <ReferenceLine y={sensor.safeMax} stroke="rgba(52,211,153,0.2)" strokeDasharray="4 4" />
-                    <Line type="monotone" dataKey="value" stroke={sensor.color} strokeWidth={1.5}
-                      dot={false} activeDot={{ r: 3, fill: sensor.color }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Stats footer */}
-              <div className="grid grid-cols-4 divide-x divide-zinc-800 border-t border-zinc-800">
-                {[
-                  { label: "CURRENT", value: `${sensor.currentValue}${sensor.unit}` },
-                  { label: "SAFE_MIN", value: `${sensor.safeMin}${sensor.unit}` },
-                  { label: "SAFE_MAX", value: `${sensor.safeMax}${sensor.unit}` },
-                  { label: "STATUS", value: sensor.status.toUpperCase() },
-                ].map(stat => (
-                  <div key={stat.label} className="px-3 py-2">
-                    <p className="text-[8px] uppercase tracking-widest text-zinc-600 mb-0.5">{stat.label}</p>
-                    <p className={`text-[10px] font-mono font-bold ${stat.label === "STATUS" ? statusColor(sensor.status) : "text-zinc-400"}`}>{stat.value}</p>
-                  </div>
-                ))}
-              </div>
+        <div className="space-y-8">
+          {/* ── AIR SECTION ── */}
+          <div>
+            <SectionHeader
+              icon={<Wind className="w-4 h-4" />}
+              title="Air Sensor"
+              subtitle="SLAVE_1 // TEMPERATURE + HUMIDITY // INDOOR/OUTDOOR AMBIENT"
+              status={airStatus}
+            />
+            <div className="grid grid-cols-2 gap-4">
+              {AIR_SENSORS.map(def => (
+                <SensorCard
+                  key={def.id}
+                  def={def}
+                  value={latest[def.id] ?? 0}
+                  data={getChartData(def.id)}
+                  range={range}
+                />
+              ))}
             </div>
-          ))}
+          </div>
+
+          {/* ── SOIL SECTION ── */}
+          <div>
+            <SectionHeader
+              icon={<Leaf className="w-4 h-4" />}
+              title="Soil Sensor"
+              subtitle="SLAVE_5 // SN-3000-ECTH-N01 // MOISTURE + TEMPERATURE + EC"
+              status={soilStatus}
+            />
+            <div className="grid grid-cols-3 gap-4">
+              {SOIL_SENSORS.map(def => (
+                <SensorCard
+                  key={def.id}
+                  def={def}
+                  value={latest[def.id] ?? 0}
+                  data={getChartData(def.id)}
+                  range={range}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
-      <div className="mt-4 flex items-center justify-between px-1">
-        <span className="text-[9px] uppercase tracking-widest text-zinc-700">SENSOR_MATRIX // RS485 MODBUS RTU // POLL_INTERVAL 30s</span>
+      <div className="flex items-center justify-between mt-4 px-1">
+        <span className="text-[9px] uppercase tracking-widest text-zinc-700">
+          RS485 // /dev/ttyACM0 // 9600 BAUD // POLL 30s
+        </span>
         <div className="flex items-center gap-1.5">
           <CircleDot className="w-2.5 h-2.5 text-emerald-400 animate-pulse" />
           <span className="text-[9px] uppercase tracking-widest text-emerald-400">LIVE</span>

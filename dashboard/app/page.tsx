@@ -5,7 +5,7 @@ import {
   Thermometer, Droplets, Waves, Zap, Terminal, Radio, Cpu,
   Wifi, CircleDot, ChevronRight, WifiOff,
 } from "lucide-react";
-import { sensorApi, alertApi, automationApi, diseaseApi } from "@/lib/api";
+import { api, sensorApi, alertApi, automationApi, diseaseApi } from "@/lib/api";
 import { useSensorWebSocket } from "@/hooks/useWebSocket";
 
 interface MetricCard {
@@ -116,6 +116,7 @@ export default function CommandOverview() {
         { id: "TEMP", label: "Ambient Temp", unit: "°C", value: d.temperature ?? 0, min: 20, max: 45, icon: <Thermometer className="w-4 h-4" /> },
         { id: "HUMID", label: "Rel. Humidity", unit: "%", value: d.humidity ?? 0, min: 0, max: 100, icon: <Droplets className="w-4 h-4" /> },
         { id: "SOIL_M", label: "Soil Moisture", unit: "%", value: d.soil_moisture ?? 0, min: 0, max: 100, icon: <Waves className="w-4 h-4" /> },
+        { id: "SOIL_T", label: "Soil Temp", unit: "°C", value: d.soil_temperature ?? 0, min: 0, max: 45, icon: <Thermometer className="w-4 h-4" /> },
         { id: "EC", label: "Elec. Conductivity", unit: "mS/cm", value: d.ec_level ?? 0, min: 0, max: 4, icon: <Zap className="w-4 h-4" /> },
       ];
       const updated = vals.map(v => {
@@ -127,7 +128,7 @@ export default function CommandOverview() {
         return { ...v, status, history: newHist };
       });
       setMetrics(updated);
-      addLog(`[SENSOR] TX → {temp:${d.temperature},hum:${d.humidity},soil:${d.soil_moisture},ec:${d.ec_level}}`);
+      addLog(`[SENSOR] TX → {temp:${d.temperature},hum:${d.humidity},soil:${d.soil_moisture},soil_temp:${d.soil_temperature},ec:${d.ec_level}}`);
     } catch {
       setIsOnline(false);
       addLog("[ERR] Backend unreachable — retrying...");
@@ -152,13 +153,16 @@ export default function CommandOverview() {
   // Fetch disease detections for zone summary
   const fetchZones = useCallback(async () => {
     try {
-      const res = await diseaseApi.getHistory(50);
-      const detections = res.data;
-      const blocks = ["Block-A", "Block-B", "Block-C"];
-      const z = blocks.map(b => {
-        const blockDets = detections.filter((d: any) => d.block_id === b);
-        const diseased = blockDets.filter((d: any) => d.disease_label !== "healthy" && d.disease_label !== "immature").length;
-        return { id: b.replace("Block-", "BLK_"), soil: 0, ec: 0, detections: diseased };
+      const [camRes, detRes] = await Promise.all([
+        api.get("/cameras/blocks/summary"),
+        diseaseApi.getHistory(50),
+      ]);
+      const cameras   = camRes.data;
+      const detections = detRes.data;
+      const z = cameras.map((cam: any) => {
+        const blockDets = detections.filter((d: any) => d.block_id === cam.block_id);
+        const diseased  = blockDets.filter((d: any) => d.disease_label !== "healthy" && d.disease_label !== "immature").length;
+        return { id: cam.block_id, soil: 0, ec: 0, detections: diseased };
       });
       setZones(z);
     } catch { /* silent */ }
@@ -188,7 +192,8 @@ export default function CommandOverview() {
         { id: "TEMP", value: wsData.temperature, unit: "°C", icon: <Thermometer className="w-4 h-4" /> },
         { id: "HUMID", value: wsData.humidity, unit: "%", icon: <Droplets className="w-4 h-4" /> },
         { id: "SOIL_M", value: wsData.soil_moisture, unit: "%", icon: <Waves className="w-4 h-4" /> },
-        { id: "EC", value: wsData.ec_level, unit: "mS/cm", icon: <Zap className="w-4 h-4" /> },
+        { id: "SOIL_T", value: wsData.soil_temperature, unit: "°C", icon: <Thermometer className="w-4 h-4" /> },
+              { id: "EC", value: wsData.ec_level, unit: "mS/cm", icon: <Zap className="w-4 h-4" /> },
       ];
       setMetrics(prev => prev.map(m => {
         const upd = vals.find(v => v.id === m.id);
@@ -244,7 +249,7 @@ export default function CommandOverview() {
       </div>
 
       {/* 4-Card Metric Strip */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-5 gap-3 mb-6">
         {metrics.map((m) => (
           <div key={m.id} className={`bg-zinc-900 rounded-lg border ${statusBorder(m.status)} p-4 relative overflow-hidden`}>
             <div className="absolute inset-x-0 top-0 h-px bg-white/5" />
@@ -373,3 +378,11 @@ export default function CommandOverview() {
     </div>
   );
 }
+
+
+
+
+
+
+
+

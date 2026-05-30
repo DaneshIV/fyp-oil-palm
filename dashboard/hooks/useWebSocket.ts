@@ -13,6 +13,7 @@ interface SensorData {
   temperature:   number
   humidity:      number
   soil_moisture: number
+  soil_temperature: number
   ec_level:      number
   timestamp:     string
 }

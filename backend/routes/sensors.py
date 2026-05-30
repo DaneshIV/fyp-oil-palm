@@ -33,9 +33,7 @@ def get_sensor_history(hours: int = Query(24), db: Session = Depends(get_db)):
 @router.post("/", response_model=SensorReading)
 def create_sensor_reading(data: SensorReadingCreate, db: Session = Depends(get_db)):
     db.execute(
-        text("""INSERT INTO sensor_readings 
-            (temperature, humidity, soil_moisture, ec_level) 
-            VALUES (:temperature, :humidity, :soil_moisture, :ec_level)"""),
+        text("""INSERT INTO sensor_readings (temperature, humidity, soil_moisture, soil_temperature, ec_level) VALUES (:temperature, :humidity, :soil_moisture, :soil_temperature, :ec_level)"""),
         data.dict()
     )
     db.commit()
@@ -75,7 +73,7 @@ async def websocket_sensors(websocket: WebSocket, db: Session = Depends(get_db))
         while True:
             # Fetch latest sensor data
             result = db.execute(text("""
-                SELECT temperature, humidity, soil_moisture, ec_level, timestamp
+                SELECT temperature, humidity, soil_moisture, soil_temperature, ec_level, timestamp
                 FROM sensor_readings
                 ORDER BY timestamp DESC
                 LIMIT 1
@@ -87,6 +85,7 @@ async def websocket_sensors(websocket: WebSocket, db: Session = Depends(get_db))
                     "temperature":   result.temperature,
                     "humidity":      result.humidity,
                     "soil_moisture": result.soil_moisture,
+                    "soil_temperature": result.soil_temperature,
                     "ec_level":      result.ec_level,
                     "timestamp":     str(result.timestamp)
                 })
@@ -120,3 +119,7 @@ async def websocket_alerts(websocket: WebSocket, db: Session = Depends(get_db)):
         manager.disconnect(websocket)
     except Exception as e:
         manager.disconnect(websocket)
+
+
+
+
