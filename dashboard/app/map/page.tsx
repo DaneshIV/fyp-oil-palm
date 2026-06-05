@@ -65,7 +65,7 @@ function CameraFeedPanel({ block, onClose }: { block: Block; onClose: () => void
 
   const fetchFrame = useCallback(async () => {
     try {
-      const res = await fetch(`${window.location.hostname === "localhost" ? "http://localhost:8000" : "https://api.project2030.me"}/cameras/${block.camera_id}/frame`, {
+      const res = await fetch(`${window.location.hostname === "localhost" ? "http://localhost:8000" : "https://api.project2030.me"}/cameras/${block.camera_id}/frame?show_boxes=false`, {
         headers: { Authorization: `Bearer ${document.cookie.match(/auth_token=([^;]+)/)?.[1] || ""}` },
         cache: "no-store",
       });
@@ -506,3 +506,4 @@ export default function IsometricMap() {
     </div>
   );
 }
+

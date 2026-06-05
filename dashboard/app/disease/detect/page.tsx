@@ -45,7 +45,7 @@ export default function DiseaseDetectPage() {
     "[READY] Awaiting input...",
   ]);
   const [error, setError]           = useState("");
-  const [camIndex, setCamIndex]     = useState("0");
+  const [camIndex, setCamIndex]     = useState("9");
   const [liveActive, setLiveActive] = useState(false);
   const fileRef    = useRef<HTMLInputElement>(null);
   const liveRef    = useRef<NodeJS.Timeout | null>(null);
@@ -230,7 +230,7 @@ export default function DiseaseDetectPage() {
                   <label className="text-[9px] uppercase tracking-widest text-zinc-600 mb-1.5 block">CAMERA_INDEX</label>
                   <input value={camIndex} onChange={e => setCamIndex(e.target.value)} disabled={liveActive}
                     className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm font-mono text-zinc-300 focus:border-emerald-500/50 outline-none disabled:opacity-50" />
-                  <p className="text-[8px] text-zinc-700 mt-1">0=webcam, 1=OBS, 2=NVIDIA virtual</p>
+                  <p className="text-[8px] text-zinc-700 mt-1">Use camera DB ID (check Block Map page for ID)</p>
                 </div>
                 <button onClick={() => setLiveActive(!liveActive)}
                   className={`w-full py-3 rounded border font-bold text-[10px] uppercase tracking-widest cursor-pointer transition-all ${liveActive ? "bg-rose-500/10 border-rose-500/40 text-rose-500 hover:bg-rose-500/20" : "bg-emerald-400/10 border-emerald-500/40 text-emerald-400 hover:bg-emerald-400/20"}`}>
@@ -363,3 +363,6 @@ export default function DiseaseDetectPage() {
     </div>
   );
 }
+
+
+

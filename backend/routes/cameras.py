@@ -203,7 +203,7 @@ def delete_camera(camera_id: int, db: Session = Depends(get_db)):
     return {"message": "Camera deleted"}
 
 @router.get("/{camera_id}/frame")
-def get_frame(camera_id: int, db: Session = Depends(get_db)):
+def get_frame(camera_id: int, show_boxes: bool = True, db: Session = Depends(get_db)):
     cam = db.execute(text(
         "SELECT * FROM cameras WHERE id = :id"
     ), {"id": camera_id}).fetchone()
@@ -226,7 +226,7 @@ def get_frame(camera_id: int, db: Session = Depends(get_db)):
     if model:
         try:
             results = model(frame, conf=0.5, iou=0.45, verbose=False)
-            frame, detections = draw_boxes(frame, results)
+            frame, detections = draw_boxes(frame, results) if show_boxes else (frame, draw_boxes(frame.copy(), results)[1])
             plant_count = len(detections)
             db.execute(text(
                 "UPDATE cameras SET plant_count = :count, last_frame = NOW() WHERE id = :id"
@@ -285,3 +285,5 @@ def get_detections(camera_id: int, db: Session = Depends(get_db)):
         "detections":  detections,
         "timestamp":   datetime.now().isoformat(),
     }
+
+

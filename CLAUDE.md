@@ -385,7 +385,7 @@ Sidebar groups:
 ## 🛡️ Triple Layer Security
 
 ```
-Layer 1: PIR (GPIO 24) — motion trigger
+Layer 1: Software-based motion detection via dashboard ARM control, replacing the planned PIR sensor due to hardware availability
 Layer 2: Camera snapshot
 Layer 3: YOLOv8n COCO — person/animal classification
 
