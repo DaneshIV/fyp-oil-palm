@@ -56,11 +56,12 @@ async def alert_soil_moisture(value: float, threshold: float = 40.0):
         [InlineKeyboardButton("✅ Acknowledge", callback_data="ack_soil")],
     ])
     message = (
-        f"🚨 <b>SOIL MOISTURE ALERT</b>\n\n"
-        f"📍 Current Value: <b>{value:.1f}%</b>\n"
-        f"⚠️ Threshold: {threshold}%\n"
-        f"💧 Status: <b>CRITICALLY LOW</b>\n\n"
-        f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        f"💧 Your soil is running dry!\n\n"
+        f"Soil moisture has dropped to {value:.1f}%, which is below the safe minimum of {threshold}%. "
+        f"Your oil palm trees may be experiencing water stress. "
+        f"The drip irrigation system should be activated as soon as possible.\n\n"
+        f"📍 Oil Palm Plantation — BLK_A\n"
+        f"🕐 {datetime.now().strftime('%d %b %Y, %I:%M %p')}"
     )
     await send_message(message, reply_markup=keyboard)
 
@@ -71,11 +72,12 @@ async def alert_temperature(value: float, threshold: float = 35.0):
         [InlineKeyboardButton("✅ Acknowledge", callback_data="ack_temp")],
     ])
     message = (
-        f"🌡️ <b>TEMPERATURE ALERT</b>\n\n"
-        f"🌡️ Current Value: <b>{value:.1f}°C</b>\n"
-        f"⚠️ Threshold: {threshold}°C\n"
-        f"🔥 Status: <b>TOO HIGH</b>\n\n"
-        f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        f"🌡️ Temperature is getting too hot!\n\n"
+        f"The temperature has risen to {value:.1f}°C, exceeding the safe limit of {threshold}°C. "
+        f"Prolonged heat stress can reduce oil palm yield and damage young fronds. "
+        f"Consider activating the mist cooling system.\n\n"
+        f"📍 Oil Palm Plantation — BLK_A\n"
+        f"🕐 {datetime.now().strftime('%d %b %Y, %I:%M %p')}"
     )
     await send_message(message, reply_markup=keyboard)
 
@@ -97,11 +99,12 @@ async def alert_ec_level(value: float, threshold: float = 1.2):
         [InlineKeyboardButton("✅ Acknowledge", callback_data="ack_ec")],
     ])
     message = (
-        f"⚡ <b>EC LEVEL ALERT</b>\n\n"
-        f"⚡ Current Value: <b>{value:.2f} mS/cm</b>\n"
-        f"⚠️ Threshold: {threshold} mS/cm\n"
-        f"📉 Status: <b>TOO LOW</b>\n\n"
-        f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        f"🌱 Your soil needs nutrients!\n\n"
+        f"The soil electrical conductivity has dropped to {value:.2f} mS/cm, below the recommended minimum of {threshold} mS/cm. "
+        f"This indicates low nutrient levels in the soil which can reduce oil palm growth and fruit production. "
+        f"Activate the fertilizer pump to restore soil health.\n\n"
+        f"📍 Oil Palm Plantation — BLK_A\n"
+        f"🕐 {datetime.now().strftime('%d %b %Y, %I:%M %p')}"
     )
     await send_message(message, reply_markup=keyboard)
 
@@ -114,21 +117,39 @@ async def alert_disease_detected(
     image_path: str = None
 ):
     """Alert when disease is detected"""
-    severity_emoji = {
-        'High': '🔴',
-        'Medium': '🟡',
-        'Low': '🟢',
-        'None': '✅'
-    }.get(severity, '⚪')
-
+    disease_info = {
+        "ganoderma": {
+            "title":  "🔴 Ganoderma Basal Stem Rot Detected",
+            "desc":   "Ganoderma boninense fungal infection has been identified on one of your oil palm trees. This is the most destructive disease in Malaysian oil palm plantations and can spread to neighbouring trees if left untreated.",
+            "action": "Isolate the affected tree immediately. Apply fungicide treatment and consult an agronomist. Do not delay — early intervention can save surrounding trees."
+        },
+        "unhealthy": {
+            "title":  "🟡 Unhealthy Palm Tree Detected",
+            "desc":   "Signs of disease or stress have been detected on one of your oil palm trees. This could indicate early-stage Bud Rot, Crown Disease, or nutrient deficiency.",
+            "action": "Inspect the tree physically for visible symptoms. Check soil nutrient levels and irrigation. Consider consulting an agricultural officer."
+        },
+        "immature": {
+            "title":  "🟢 Young Palm Tree Identified",
+            "desc":   "An immature oil palm tree has been detected in this area. Young palms require special care and are more vulnerable to disease and pests.",
+            "action": "Ensure adequate fertilization and irrigation for young trees. Monitor closely over the next few weeks."
+        },
+        "healthy": {
+            "title":  "✅ Healthy Palm Tree Confirmed",
+            "desc":   "The scanned oil palm tree appears to be in good health with no visible signs of disease.",
+            "action": "No action required. Continue regular monitoring and maintenance."
+        }
+    }
+    info = disease_info.get(disease_label.lower(), {
+        "title":  "⚠️ Abnormality Detected",
+        "desc":   "An abnormality has been detected on one of your oil palm trees.",
+        "action": "Physically inspect the tree and consult an agricultural officer."
+    })
     caption = (
-        f"🔬 <b>DISEASE DETECTED</b>\n\n"
-        f"🌴 Disease: <b>{disease_label.replace('_', ' ').title()}</b>\n"
-        f"📊 Confidence: <b>{confidence:.1f}%</b>\n"
-        f"{severity_emoji} Severity: <b>{severity}</b>\n"
-        f"🌳 Tree ID: {tree_id}\n"
-        f"📍 Block: {block_id}\n\n"
-        f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        f"{info['title']}\n\n"
+        f"{info['desc']}\n\n"
+        f"📍 Tree {tree_id} — Block {block_id}\n"
+        f"🕐 {datetime.now().strftime('%d %b %Y, %I:%M %p')}\n\n"
+        f"💡 {info['action']}"
     )
 
     if image_path and os.path.exists(image_path):
@@ -138,24 +159,37 @@ async def alert_disease_detected(
 
 async def notify_relay_activated(relay_name: str, relay_pin: int, reason: str):
     """Notify when a relay is automatically activated"""
+    # Human-friendly relay messages
+    relay_actions = {
+        "Drip Irrigation":  ("💧 Irrigation Started", "Soil moisture has dropped below the safe threshold. The drip irrigation system has been automatically activated to water your oil palm trees."),
+        "Mist Pump":        ("🌫️ Mist Cooling Activated", "Temperature has exceeded the safe limit. The mist cooling system has been turned on to protect your crops from heat stress."),
+        "NPK-A Pump":       ("🌱 Fertilizer Pump A Activated", "Soil EC level has dropped below the recommended range. Fertilizer Pump A has been activated to replenish soil nutrients."),
+        "NPK-B Pump":       ("🌱 Fertilizer Pump B Activated", "Soil EC level has dropped below the recommended range. Fertilizer Pump B has been activated to replenish soil nutrients."),
+        "NPK-C Pump":       ("🌱 Fertilizer Pump C Activated", "Soil EC level has dropped below the recommended range. Fertilizer Pump C has been activated to replenish soil nutrients."),
+    }
+    title, desc = relay_actions.get(relay_name, (f"⚙️ {relay_name} Activated", f"{relay_name} has been automatically activated by the system."))
     message = (
-        f"⚙️ <b>RELAY ACTIVATED</b>\n\n"
-        f"🔌 Device: <b>{relay_name}</b>\n"
-        f"📍 Pin: {relay_pin}\n"
-        f"📋 Reason: {str(reason).replace(chr(60), chr(40)).replace(chr(62), chr(41))}\n"
-        f"✅ Status: <b>ON</b>\n\n"
-        f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        f"{title}\n\n"
+        f"{desc}\n\n"
+        f"🕐 {datetime.now().strftime('%d %b %Y, %I:%M %p')}\n"
+        f"🤖 Triggered automatically by sensor threshold rule"
     )
     await send_message(message)
 
 async def notify_relay_deactivated(relay_name: str, relay_pin: int):
     """Notify when a relay is deactivated"""
+    relay_names = {
+        "Drip Irrigation": "💧 Irrigation Stopped",
+        "Mist Pump":       "🌫️ Mist Cooling Stopped",
+        "NPK-A Pump":      "🌱 Fertilizer Pump A Stopped",
+        "NPK-B Pump":      "🌱 Fertilizer Pump B Stopped",
+        "NPK-C Pump":      "🌱 Fertilizer Pump C Stopped",
+    }
+    title = relay_names.get(relay_name, f"⚙️ {relay_name} Stopped")
     message = (
-        f"⚙️ <b>RELAY DEACTIVATED</b>\n\n"
-        f"🔌 Device: <b>{relay_name}</b>\n"
-        f"📍 Pin: {relay_pin}\n"
-        f"⏹️ Status: <b>OFF</b>\n\n"
-        f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        f"{title}\n\n"
+        f"Sensor readings have returned to normal levels. {relay_name} has been automatically turned off.\n\n"
+        f"🕐 {datetime.now().strftime('%d %b %Y, %I:%M %p')}"
     )
     await send_message(message)
 
