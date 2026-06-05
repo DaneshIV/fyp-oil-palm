@@ -61,14 +61,23 @@ async def send_security_telegram(
             for d in detections[:5]
         ]) or "  • Unknown subject"
 
+        # Human-friendly messages
+        if threat_type == "person":
+            title   = "🚨 Intruder Alert"
+            action  = "An unrecognised person has been spotted near your plantation. Please inspect the area immediately or contact local authorities if needed."
+        elif threat_type == "animal":
+            title   = "⚠️ Animal Activity Detected"
+            action  = "An animal has been detected near your crops. Check the area for any damage to your oil palm trees."
+        else:
+            title   = "📋 Motion Detected"
+            action  = "Unexpected motion was detected near your plantation. Please verify the area when possible."
+
         caption = (
-            f"{emoji} <b>SECURITY ALERT — {level}</b>\n\n"
-            f"🎯 Threat: <b>{threat_type.upper()}</b>\n"
-            f"📊 Confidence: <b>{confidence:.1f}%</b>\n"
-            f"🔍 Detected:\n{det_summary}\n\n"
-            f"📸 Snapshot attached\n"
-            f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-            f"⚡ Triple Layer Security — YOLOv8n"
+            f"{title}\n\n"
+            f"{action}\n\n"
+            f"📍 Location: Oil Palm Plantation — BLK_A\n"
+            f"🕐 {datetime.now().strftime('%d %b %Y, %I:%M %p')}\n"
+            f"📸 Snapshot attached for your reference"
         )
 
         if snapshot_path and os.path.exists(snapshot_path):
@@ -160,8 +169,7 @@ async def security_detect(file: UploadFile = File(...)):
                         VALUES (%s, %s, %s, %s, %s)
                     """, (
                         f"security_{threat_type}",
-                        f"Security Alert: {threat_type.upper()} detected "
-                        f"({best_conf*100:.1f}% confidence) — {det_summary}",
+                        f"Intruder spotted near the plantation. Immediate inspection recommended." if threat_type == "person" else f"Animal activity detected near the plantation. Check for crop damage.",
                         round(best_conf * 100, 1),
                         45.0,
                         False
@@ -238,7 +246,7 @@ async def test_security_alert(db: Session = Depends(get_db)):
         VALUES (:type, :msg, :val, :thresh, :ack)
     """), {
         "type":   "security_person",
-        "msg":    "Security Alert: PERSON detected (87.5% confidence) — person (87.5%)",
+        "msg":    "Intruder spotted near the plantation — take immediate action.",
         "val":    87.5,
         "thresh": 45.0,
         "ack":    False
@@ -349,7 +357,7 @@ async def get_security_frame(camera_index: str = "0"):
                 cv2.putText(frame,txt,(x1+3,y1-5),cv2.FONT_HERSHEY_SIMPLEX,0.55,(0,0,0),1)
                 detections.append({"label":label,"confidence":round(conf*100,1)})
 
-        overlay = {"person":"!! PERSON DETECTED !!","animal":"ANIMAL DETECTED","clear":"CLEAR"}
+        overlay = {"person":"INTRUDER DETECTED","animal":"ANIMAL NEARBY","clear":"AREA CLEAR"}
         colors  = {"person":COLOR_PERSON,"animal":COLOR_ANIMAL,"clear":(52,211,153)}
         cv2.putText(frame,overlay.get(threat_type,"CLEAR"),(10,30),cv2.FONT_HERSHEY_SIMPLEX,0.8,colors.get(threat_type,(200,200,200)),2)
 
@@ -385,7 +393,7 @@ async def get_security_frame(camera_index: str = "0"):
                     cursor.execute(
                         "INSERT INTO alerts (alert_type, message, sensor_value, threshold, acknowledged) VALUES (%s, %s, %s, %s, %s)",
                         ("security_{}".format(threat_type),
-                         "Security Alert: {} detected ({:.1f}% confidence) — {}".format(threat_type.upper(), best_conf, det_list),
+                         ("Intruder spotted near the plantation — take immediate action." if threat_type == "person" else ("Animal detected near crops — check for potential damage." if threat_type == "animal" else "Unexpected motion detected — please verify the area.")),
                          best_conf, 25.0, False)
                     )
                     conn.commit()
@@ -410,6 +418,7 @@ async def get_security_frame(camera_index: str = "0"):
         content=buf.tobytes(), media_type="image/jpeg",
         headers={"X-Threat-Type": threat_type, "X-Detection-Count": str(len(detections)), "Cache-Control": "no-cache"}
     )
+
 
 
 
